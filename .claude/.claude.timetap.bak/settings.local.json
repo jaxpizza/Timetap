@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/jacobwendling/**)",
+      "Bash(npx create-next-app@latest timetap --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm)",
+      "Bash(mv /Users/jacobwendling/timetap/.env.local /Users/jacobwendling/timetap/.env.local.bak)",
+      "Bash(mv /Users/jacobwendling/timetap/.claude /Users/jacobwendling/timetap/.claude.bak)"
+    ]
+  }
+}
