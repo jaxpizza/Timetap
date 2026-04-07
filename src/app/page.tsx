@@ -13,11 +13,7 @@ import {
   Play,
   Menu,
   X,
-  Check,
   ArrowRight,
-  Users,
-  Shield,
-  BarChart3,
   ChevronRight,
 } from "lucide-react";
 
@@ -84,38 +80,6 @@ const features = [
   { icon: Sparkles, title: "AI Insights", desc: "Workforce analytics. Overtime alerts. Smart recommendations.", color: "#A78BFA", bg: "rgba(167,139,250,0.08)" },
 ];
 
-/* ── pricing data ── */
-
-const plans = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "/mo",
-    desc: "For small teams getting started",
-    features: ["Up to 5 employees", "Time clock & breaks", "Basic scheduling", "PTO requests", "Mobile access"],
-    cta: "Get Started",
-    popular: false,
-  },
-  {
-    name: "Pro",
-    price: "$8",
-    period: "/employee/mo",
-    desc: "For growing businesses",
-    features: ["Up to 50 employees", "Everything in Free", "Payroll processing", "Location tracking", "AI insights", "Priority support"],
-    cta: "Start Free Trial",
-    popular: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    desc: "For large organizations",
-    features: ["Unlimited employees", "Everything in Pro", "API access", "Custom integrations", "Dedicated account manager", "SLA guarantee"],
-    cta: "Contact Sales",
-    popular: false,
-  },
-];
-
 /* ── main page ── */
 
 export default function LandingPage() {
@@ -153,7 +117,6 @@ export default function LandingPage() {
           {/* Desktop links */}
           <div className="hidden items-center gap-8 md:flex">
             <a href="#features" className="text-sm text-zinc-400 transition-colors hover:text-white">Features</a>
-            <a href="#pricing" className="text-sm text-zinc-400 transition-colors hover:text-white">Pricing</a>
             <a href="#preview" className="text-sm text-zinc-400 transition-colors hover:text-white">Preview</a>
           </div>
 
@@ -186,7 +149,6 @@ export default function LandingPage() {
             >
               <div className="flex flex-col gap-1 px-5 py-4">
                 <a href="#features" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800/50">Features</a>
-                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800/50">Pricing</a>
                 <a href="#preview" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800/50">Preview</a>
                 <div className="my-2 h-px bg-zinc-800/50" />
                 <Link href="/auth/login" className="rounded-lg px-3 py-2.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800/50">Sign In</Link>
@@ -284,26 +246,6 @@ export default function LandingPage() {
             <ChevronRight size={16} className="rotate-90 text-zinc-500" />
           </motion.div>
         </motion.div>
-      </section>
-
-      {/* ═══ SOCIAL PROOF ═══ */}
-      <section className="border-y border-zinc-800/40 py-10">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-12 gap-y-4 px-5 text-center">
-          <p className="text-sm font-medium text-zinc-500">Built for teams of all sizes</p>
-          <div className="flex items-center gap-3">
-            {[Users, Shield, BarChart3, Clock].map((Icon, i) => (
-              <div key={i} className="flex size-9 items-center justify-center rounded-lg border border-zinc-800/60 bg-zinc-900/50">
-                <Icon size={16} className="text-zinc-600" />
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-1.5">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="size-2 rounded-full bg-indigo-500/60" />
-            ))}
-            <span className="ml-2 text-sm text-zinc-500">Thousands of hours tracked</span>
-          </div>
-        </div>
       </section>
 
       {/* ═══ FEATURES ═══ */}
@@ -423,61 +365,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ═══ PRICING ═══ */}
-      <section id="pricing" className="py-24 sm:py-32">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <FadeInSection className="text-center">
-            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Simple, transparent pricing</h2>
-            <p className="mt-4 text-lg text-zinc-400">Start free. Scale as you grow.</p>
-          </FadeInSection>
-
-          <div className="mt-16 grid grid-cols-1 gap-4 md:grid-cols-3">
-            {plans.map((plan, i) => (
-              <FadeInSection key={plan.name} delay={i * 0.1}>
-                <div
-                  className={`relative flex flex-col rounded-2xl p-8 transition-all duration-300 ${plan.popular ? "scale-[1.02] md:scale-105" : ""}`}
-                  style={{
-                    backgroundColor: "#0F0F12",
-                    border: plan.popular ? "1px solid rgba(99,102,241,0.3)" : "1px solid rgba(39,39,42,0.4)",
-                    boxShadow: plan.popular ? "0 0 40px rgba(99,102,241,0.08)" : undefined,
-                  }}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-1 text-xs font-bold">
-                      Most Popular
-                    </div>
-                  )}
-                  <h3 className="text-lg font-bold">{plan.name}</h3>
-                  <div className="mt-4 flex items-baseline gap-1">
-                    <span className="font-mono text-4xl font-extrabold">{plan.price}</span>
-                    <span className="text-sm text-zinc-500">{plan.period}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-zinc-500">{plan.desc}</p>
-                  <ul className="mt-6 flex-1 space-y-3">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-sm text-zinc-300">
-                        <Check size={14} style={{ color: plan.popular ? "#818CF8" : "#34D399" }} />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    href="/auth/signup"
-                    className={`mt-8 block rounded-xl py-3 text-center text-sm font-semibold transition-all ${
-                      plan.popular
-                        ? "bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:shadow-[0_0_25px_rgba(99,102,241,0.3)]"
-                        : "border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
-                    }`}
-                  >
-                    {plan.cta}
-                  </Link>
-                </div>
-              </FadeInSection>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ═══ CTA ═══ */}
       <section className="relative overflow-hidden py-24 sm:py-32">
         <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(99,102,241,0.08) 0%, transparent 70%)" }} />
@@ -486,7 +373,7 @@ export default function LandingPage() {
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl">
               Ready to transform your workforce management?
             </h2>
-            <p className="mt-4 text-lg text-zinc-400">Start free. No credit card required.</p>
+            <p className="mt-4 text-lg text-zinc-400">Completely free while in beta. No credit card required.</p>
             <Link
               href="/auth/signup"
               className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-10 py-4 text-lg font-semibold text-white transition-all hover:scale-105 hover:shadow-[0_0_50px_rgba(99,102,241,0.4)]"
@@ -518,7 +405,7 @@ export default function LandingPage() {
 
             {/* Links */}
             {[
-              { title: "Product", links: ["Features", "Pricing", "Changelog", "Roadmap"] },
+              { title: "Product", links: ["Features", "Changelog", "Roadmap"] },
               { title: "Company", links: ["About", "Blog", "Careers", "Contact"] },
               { title: "Legal", links: ["Privacy", "Terms", "Security", "Status"] },
             ].map((col) => (
