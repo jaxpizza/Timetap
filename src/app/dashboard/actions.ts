@@ -2,7 +2,8 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { startOfLocalWeek } from "@/lib/utils";
+import { startOfLocalWeek, formatHours } from "@/lib/utils";
+import { notifyOrgOwner } from "@/lib/notifications/create";
 
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000; // meters
@@ -162,6 +163,16 @@ export async function clockOut(
   // Recalculate weekly overtime after each clock-out
   if (profile?.organization_id) {
     await recalculateWeeklyOvertime(user.id, profile.organization_id).catch(() => {});
+    // Notify org owner of completed shift
+    const { data: emp } = await admin.from("profiles").select("first_name, last_name").eq("id", user.id).single();
+    const empName = emp ? `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() : "An employee";
+    notifyOrgOwner({
+      organizationId: profile.organization_id,
+      type: "timesheet_pending",
+      title: "Timesheet Ready",
+      message: `${empName} completed a ${formatHours(data.total_hours ?? 0)} shift`,
+      link: "/admin/timesheets",
+    }).catch(() => {});
   }
 
   return { success: true, totalHours: data.total_hours };

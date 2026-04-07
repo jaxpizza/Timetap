@@ -18,6 +18,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/components/theme-provider";
 import { getInitials, getGreeting } from "@/lib/utils";
+import { NotificationBell } from "@/components/notification-dropdown";
 
 const tabs = [
   { label: "Clock", icon: Clock, href: "/dashboard" },
@@ -45,6 +46,7 @@ export default function DashboardLayout({
     role?: string;
   } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
@@ -58,6 +60,14 @@ export default function DashboardLayout({
           .single()
           .then(({ data }) => {
             if (data) setProfile(data);
+          });
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", user.id)
+          .eq("is_read", false)
+          .then(({ count }) => {
+            setNotifCount(count ?? 0);
           });
       }
     });
@@ -206,12 +216,7 @@ export default function DashboardLayout({
             >
               {mounted && (theme === "dark" ? <Sun size={15} /> : <Moon size={15} />)}
             </button>
-            <button
-              className="relative flex size-8 items-center justify-center rounded-lg transition-colors"
-              style={{ color: "var(--tt-text-tertiary)" }}
-            >
-              <Bell size={16} />
-            </button>
+            <NotificationBell initialCount={notifCount} />
           </div>
         </header>
 
@@ -250,12 +255,7 @@ export default function DashboardLayout({
                 </motion.span>
               </AnimatePresence>
             </button>
-            <button
-              className="relative flex size-8 items-center justify-center rounded-lg transition-colors"
-              style={{ color: "var(--tt-text-tertiary)" }}
-            >
-              <Bell size={15} />
-            </button>
+            <NotificationBell initialCount={notifCount} />
           </div>
         </header>
 

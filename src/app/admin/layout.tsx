@@ -28,6 +28,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/components/theme-provider";
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { getInitials } from "@/lib/utils";
+import { NotificationBell } from "@/components/notification-dropdown";
 import {
   Tooltip,
   TooltipTrigger,
@@ -510,20 +511,7 @@ export default function AdminLayout({
           >
             {mounted && (theme === "dark" ? <Sun size={15} /> : <Moon size={15} />)}
           </button>
-          <button
-            className="relative flex size-8 items-center justify-center rounded-lg transition-colors"
-            style={{ color: "var(--tt-text-tertiary)" }}
-          >
-            <Bell size={16} />
-            {notifCount > 0 && (
-              <span
-                className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white animate-[badge-pulse_2s_ease-in-out_infinite]"
-                style={{ boxShadow: "0 0 8px rgba(244,63,94,0.4)" }}
-              >
-                {notifCount > 9 ? "9+" : notifCount}
-              </span>
-            )}
-          </button>
+          <NotificationBell initialCount={notifCount} />
           <UserAvatar
             firstName={profile?.first_name}
             lastName={profile?.last_name}
@@ -591,21 +579,7 @@ export default function AdminLayout({
               </AnimatePresence>
             </button>
 
-            <button
-              className="relative flex size-8 items-center justify-center rounded-lg transition-colors duration-200"
-              style={{ color: "var(--tt-text-tertiary)" }}
-            >
-              <Bell size={15} />
-              {notifCount > 0 && <span
-                className="absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white animate-[badge-pulse_2s_ease-in-out_infinite]"
-                style={{
-                  height: 16,
-                  boxShadow: "0 0 8px rgba(244,63,94,0.4)",
-                }}
-              >
-                {notifCount > 9 ? "9+" : notifCount}
-              </span>}
-            </button>
+            <NotificationBell initialCount={notifCount} />
 
             <div className="ml-1">
               <UserAvatar

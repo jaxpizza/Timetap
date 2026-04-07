@@ -2,6 +2,7 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyAllEmployees } from "@/lib/notifications/create";
 
 export async function createPayPeriod(input: {
   organizationId: string;
@@ -250,6 +251,16 @@ export async function approvePayroll(input: {
     .eq("id", input.payPeriodId);
 
   if (updateErr) return { success: false, error: updateErr.message };
+
+  // Notify all employees that payroll was processed
+  notifyAllEmployees({
+    organizationId: input.organizationId,
+    type: "payroll_processed",
+    title: "Payroll Processed",
+    message: "Payroll has been processed. Check your timesheet for details.",
+    link: "/dashboard/timesheet",
+  }).catch(() => {});
+
   return { success: true };
 }
 

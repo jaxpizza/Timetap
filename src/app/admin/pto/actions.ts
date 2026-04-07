@@ -2,6 +2,7 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createNotification } from "@/lib/notifications/create";
 
 export async function approvePTORequest(
   requestId: string,
@@ -48,6 +49,22 @@ export async function approvePTORequest(
       .lte("start_time", ptoEnd);
   }
 
+  // Notify the employee
+  const { data: policy } = await admin.from("pto_policies").select("name").eq("id", ptoPolicyId).single();
+  const { data: org } = await admin.from("organizations").select("id").eq("id", requestId).maybeSingle();
+  // Get orgId from the request itself
+  const { data: req } = await admin.from("pto_requests").select("organization_id").eq("id", requestId).single();
+  if (req) {
+    createNotification({
+      organizationId: req.organization_id,
+      profileId,
+      type: "pto_approved",
+      title: "PTO Approved",
+      message: `Your ${policy?.name ?? "PTO"} request for ${startDate ?? ""}${endDate ? ` – ${endDate}` : ""} has been approved`,
+      link: "/dashboard/pto",
+    }).catch(() => {});
+  }
+
   return { success: true };
 }
 
@@ -79,6 +96,19 @@ export async function denyPTORequest(
     await admin.from("pto_balances").update({
       pending_hours: Math.max(0, (bal.pending_hours ?? 0) - totalHours),
     }).eq("id", bal.id);
+  }
+
+  // Notify the employee
+  const { data: req } = await admin.from("pto_requests").select("organization_id, start_date, end_date, pto_policies(name)").eq("id", requestId).single();
+  if (req) {
+    createNotification({
+      organizationId: (req as any).organization_id,
+      profileId,
+      type: "pto_denied",
+      title: "PTO Denied",
+      message: `Your ${(req as any).pto_policies?.name ?? "PTO"} request was denied${reviewNote ? `. Reason: ${reviewNote}` : ""}`,
+      link: "/dashboard/pto",
+    }).catch(() => {});
   }
 
   return { success: true };

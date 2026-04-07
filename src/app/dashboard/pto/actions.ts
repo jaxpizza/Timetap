@@ -2,6 +2,7 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyOrgOwner } from "@/lib/notifications/create";
 
 export async function requestPTO(input: {
   ptoPolicyId: string;
@@ -43,6 +44,18 @@ export async function requestPTO(input: {
       pending_hours: (balance.pending_hours ?? 0) + input.totalHours,
     }).eq("id", balance.id);
   }
+
+  // Notify org owner
+  const { data: profile } = await admin.from("profiles").select("first_name, last_name").eq("id", user.id).single();
+  const { data: policy } = await admin.from("pto_policies").select("name").eq("id", input.ptoPolicyId).single();
+  const empName = profile ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() : "An employee";
+  notifyOrgOwner({
+    organizationId: input.organizationId,
+    type: "pto_request",
+    title: "PTO Request",
+    message: `${empName} requested ${input.totalHours}h of ${policy?.name ?? "PTO"} for ${input.startDate} – ${input.endDate}`,
+    link: "/admin/pto",
+  }).catch(() => {});
 
   return { success: true };
 }

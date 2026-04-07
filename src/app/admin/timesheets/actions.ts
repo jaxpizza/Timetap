@@ -2,6 +2,7 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createNotification } from "@/lib/notifications/create";
 
 export async function approveTimeEntry(
   timeEntryId: string
@@ -13,16 +14,32 @@ export async function approveTimeEntry(
   if (!user) return { success: false, error: "Not authenticated" };
 
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data: entry, error } = await admin
     .from("time_entries")
     .update({
       status: "approved",
       approved_by: user.id,
       approved_at: new Date().toISOString(),
     })
-    .eq("id", timeEntryId);
+    .eq("id", timeEntryId)
+    .select("profile_id, organization_id, clock_in")
+    .single();
 
   if (error) return { success: false, error: error.message };
+
+  // Notify the employee
+  if (entry) {
+    const clockDate = new Date(entry.clock_in).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    createNotification({
+      organizationId: entry.organization_id,
+      profileId: entry.profile_id,
+      type: "timesheet_approved",
+      title: "Timesheet Approved",
+      message: `Your timesheet for ${clockDate} has been approved`,
+      link: "/dashboard/timesheet",
+    }).catch(() => {});
+  }
+
   return { success: true };
 }
 
@@ -58,12 +75,27 @@ export async function flagTimeEntry(
   note: string
 ): Promise<{ success: boolean; error?: string }> {
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data: entry, error } = await admin
     .from("time_entries")
     .update({ status: "flagged", notes: note })
-    .eq("id", timeEntryId);
+    .eq("id", timeEntryId)
+    .select("profile_id, organization_id, clock_in")
+    .single();
 
   if (error) return { success: false, error: error.message };
+
+  if (entry) {
+    const clockDate = new Date(entry.clock_in).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    createNotification({
+      organizationId: entry.organization_id,
+      profileId: entry.profile_id,
+      type: "timesheet_flagged",
+      title: "Timesheet Flagged",
+      message: `Your timesheet for ${clockDate} was flagged: ${note}`,
+      link: "/dashboard/timesheet",
+    }).catch(() => {});
+  }
+
   return { success: true };
 }
 

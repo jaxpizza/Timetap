@@ -3,6 +3,7 @@
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { toLocalDateString } from "@/lib/utils";
+import { createNotification } from "@/lib/notifications/create";
 
 export async function createShift(input: {
   organizationId: string;
@@ -100,9 +101,25 @@ export async function publishSchedule(
     .update({ is_published: true, published_at: new Date().toISOString() })
     .eq("organization_id", organizationId)
     .eq("is_published", false)
-    .select("id");
+    .select("id, profile_id");
 
   if (error) return { success: false, error: error.message };
+
+  // Notify unique employees who have published shifts
+  if (data && data.length > 0) {
+    const uniqueProfileIds = [...new Set(data.map((s: any) => s.profile_id))];
+    for (const profileId of uniqueProfileIds) {
+      createNotification({
+        organizationId,
+        profileId: profileId as string,
+        type: "shift_published",
+        title: "Schedule Published",
+        message: "Your schedule has been updated. Check your upcoming shifts.",
+        link: "/dashboard/schedule",
+      }).catch(() => {});
+    }
+  }
+
   return { success: true, count: data?.length ?? 0 };
 }
 
