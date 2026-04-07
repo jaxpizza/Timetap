@@ -68,9 +68,9 @@ export async function middleware(request: NextRequest) {
     return redirectTo("/onboarding");
   }
 
-  // Root
+  // Root — show landing page to unauthenticated users
   if (pathname === "/") {
-    if (!user) return redirectTo("/auth/login");
+    if (!user) return response; // Let them see the landing page
     if (isRejected || !hasOrg) return redirectTo("/onboarding");
     return roleBasedRedirect();
   }
