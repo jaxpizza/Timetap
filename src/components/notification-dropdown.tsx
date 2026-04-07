@@ -59,6 +59,11 @@ export function NotificationBell({ initialCount = 0 }: { initialCount?: number }
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Keep count in sync if parent re-renders with new initialCount
+  useEffect(() => {
+    setUnreadCount(initialCount);
+  }, [initialCount]);
+
   // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -78,6 +83,8 @@ export function NotificationBell({ initialCount = 0 }: { initialCount?: number }
       setLoading(true);
       const data = await getNotifications(20);
       setNotifications(data as Notification[]);
+      // Also sync unread count from fetched data
+      setUnreadCount(data.filter((n: any) => !n.is_read).length);
       setLoading(false);
     }
   }
@@ -101,7 +108,7 @@ export function NotificationBell({ initialCount = 0 }: { initialCount?: number }
   }
 
   return (
-    <div ref={dropdownRef} className="relative">
+    <div ref={dropdownRef} style={{ position: "relative" }}>
       {/* Bell button */}
       <button
         onClick={handleToggle}
@@ -111,8 +118,11 @@ export function NotificationBell({ initialCount = 0 }: { initialCount?: number }
         <Bell size={16} />
         {unreadCount > 0 && (
           <span
-            className="absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white"
-            style={{ height: 16, boxShadow: "0 0 8px rgba(244,63,94,0.4)" }}
+            className="absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white animate-[badge-pulse_2s_ease-in-out_infinite]"
+            style={{
+              height: 18,
+              boxShadow: "0 0 8px rgba(244,63,94,0.4)",
+            }}
           >
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
@@ -127,8 +137,12 @@ export function NotificationBell({ initialCount = 0 }: { initialCount?: number }
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full z-50 mt-2 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl shadow-2xl"
-            style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}
+            className="absolute right-0 top-full mt-2 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl shadow-2xl"
+            style={{
+              zIndex: 9999,
+              backgroundColor: "var(--tt-card-bg)",
+              border: "1px solid var(--tt-border-subtle)",
+            }}
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--tt-border-faint)" }}>
@@ -162,7 +176,7 @@ export function NotificationBell({ initialCount = 0 }: { initialCount?: number }
                   <button
                     key={notif.id}
                     onClick={() => handleMarkRead(notif)}
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors"
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:brightness-110"
                     style={{
                       backgroundColor: notif.is_read ? "transparent" : "var(--tt-elevated-bg)",
                       borderBottom: "1px solid var(--tt-border-faint)",
@@ -177,7 +191,7 @@ export function NotificationBell({ initialCount = 0 }: { initialCount?: number }
                         <Icon size={14} style={{ color: config.color }} />
                       </div>
                       {!notif.is_read && (
-                        <span className="absolute -left-1 -top-1 size-2 rounded-full bg-indigo-500" />
+                        <span className="absolute -left-1 -top-1 size-2.5 rounded-full bg-indigo-500" style={{ boxShadow: "0 0 4px rgba(99,102,241,0.5)" }} />
                       )}
                     </div>
 
