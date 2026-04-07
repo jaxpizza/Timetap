@@ -10,7 +10,6 @@ import {
   Palmtree,
   MapPin,
   Sparkles,
-  Play,
   Menu,
   X,
   ArrowRight,
@@ -254,10 +253,6 @@ export default function LandingPage() {
             Start Free
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
-          <button className="flex items-center gap-2 rounded-xl border border-[var(--tt-border)] px-8 py-4 text-base font-semibold text-[var(--tt-text-secondary)] transition-all hover:border-[var(--tt-text-muted)] hover:text-white">
-            <Play size={16} fill="currentColor" />
-            Watch Demo
-          </button>
         </motion.div>
 
         {/* Scroll indicator */}
