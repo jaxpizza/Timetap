@@ -54,6 +54,7 @@ export default function SignupPage() {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
         },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -90,7 +91,7 @@ export default function SignupPage() {
             We sent a confirmation link to{" "}
             <span className="font-medium text-foreground">{email}</span>.
             <br />
-            Click it to activate your account.
+            Click it to activate your account, then come back to sign in.
           </p>
           <Link
             href="/auth/login"

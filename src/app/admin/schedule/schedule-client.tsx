@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Plus, Send, Calendar, ChevronDown, Repeat } 
 import { toast } from "sonner";
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday } from "date-fns";
 import { getInitials, parseLocalDate } from "@/lib/utils";
-import { publishSchedule, getWeekSchedules, getMonthSchedules } from "./actions";
+import { publishSchedule, getWeekSchedules, getMonthSchedules, getPTOForRange } from "./actions";
 import { AddShiftSheet } from "./add-shift-sheet";
 import { RecurringShiftSheet } from "./recurring-shift-sheet";
 
@@ -28,6 +28,7 @@ export function ScheduleClient({ schedules: initialSchedules, employees, departm
   const [weekStartStr, setWeekStartStr] = useState(initialWeekStart);
   const [monthDate, setMonthDate] = useState(new Date());
   const [schedules, setSchedules] = useState(initialSchedules);
+  const [ptoReqs, setPtoReqs] = useState(ptoRequests);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [prefillDate, setPrefillDate] = useState<string | undefined>();
@@ -56,7 +57,7 @@ export function ScheduleClient({ schedules: initialSchedules, employees, departm
 
   const ptoMap = useMemo(() => {
     const m = new Map<string, string>();
-    for (const req of ptoRequests) {
+    for (const req of ptoReqs) {
       try {
         const start = parseLocalDate(req.start_date);
         const end = parseLocalDate(req.end_date);
@@ -66,12 +67,18 @@ export function ScheduleClient({ schedules: initialSchedules, employees, departm
       } catch {}
     }
     return m;
-  }, [ptoRequests]);
+  }, [ptoReqs]);
 
   async function navigateWeek(offset: number) {
     const ns = addDays(weekStart, offset * 7);
+    const ne = addDays(ns, 6);
     setWeekStartStr(ns.toISOString());
-    setSchedules(await getWeekSchedules(organizationId, ns.toISOString(), addDays(ns, 6).toISOString()));
+    const [s, p] = await Promise.all([
+      getWeekSchedules(organizationId, ns.toISOString(), ne.toISOString()),
+      getPTOForRange(organizationId, ns.toISOString(), ne.toISOString()),
+    ]);
+    setSchedules(s);
+    setPtoReqs(p as any);
   }
 
   async function navigateMonth(offset: number) {
@@ -79,7 +86,12 @@ export function ScheduleClient({ schedules: initialSchedules, employees, departm
     setMonthDate(nm);
     const ms = startOfMonth(nm);
     const me = endOfMonth(nm);
-    setSchedules(await getMonthSchedules(organizationId, ms.toISOString(), me.toISOString()));
+    const [s, p] = await Promise.all([
+      getMonthSchedules(organizationId, ms.toISOString(), me.toISOString()),
+      getPTOForRange(organizationId, ms.toISOString(), me.toISOString()),
+    ]);
+    setSchedules(s);
+    setPtoReqs(p as any);
   }
 
   async function handlePublish() {

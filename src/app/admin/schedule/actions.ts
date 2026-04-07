@@ -2,6 +2,7 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { toLocalDateString } from "@/lib/utils";
 
 export async function createShift(input: {
   organizationId: string;
@@ -134,6 +135,22 @@ export async function getMonthSchedules(
     .gte("start_time", monthStart)
     .lte("start_time", monthEnd)
     .order("start_time");
+  return data ?? [];
+}
+
+export async function getPTOForRange(
+  organizationId: string,
+  rangeStart: string,
+  rangeEnd: string
+) {
+  const supabase = await createReadOnlyClient();
+  const { data } = await supabase
+    .from("pto_requests")
+    .select("profile_id, start_date, end_date, pto_policies(name)")
+    .eq("organization_id", organizationId)
+    .eq("status", "approved")
+    .lte("start_date", toLocalDateString(new Date(rangeEnd)))
+    .gte("end_date", toLocalDateString(new Date(rangeStart)));
   return data ?? [];
 }
 

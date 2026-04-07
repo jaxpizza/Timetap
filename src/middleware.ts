@@ -78,6 +78,7 @@ export async function middleware(request: NextRequest) {
   // Auth pages
   if (pathname.startsWith("/auth")) {
     if (pathname.startsWith("/auth/reset-password")) return response;
+    if (pathname.startsWith("/auth/callback")) return response;
     if (user) {
       if (isRejected || !hasOrg) return redirectTo("/onboarding");
       return roleBasedRedirect();

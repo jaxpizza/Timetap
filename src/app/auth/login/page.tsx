@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, Loader2 } from "lucide-react";
+import { Clock, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const confirmed = searchParams.get("confirmed") === "true";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -98,6 +101,13 @@ export default function LoginPage() {
       </div>
 
       {/* Card */}
+      {confirmed && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+          <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+          <p className="text-sm text-emerald-400">Email confirmed! You can now sign in.</p>
+        </div>
+      )}
+
       <div className="rounded-card border border-zinc-700/80 bg-card p-8 shadow-xl shadow-black/20 ring-1 ring-white/[0.03]">
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Email */}
