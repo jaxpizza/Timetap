@@ -152,14 +152,15 @@ export default function LandingPage() {
           </div>
 
           {/* Mobile buttons */}
-          <div className="flex items-center gap-1 md:hidden">
+          <div className="flex items-center gap-1.5 md:hidden">
             <button
               onClick={toggleTheme}
-              className="flex size-9 items-center justify-center rounded-lg text-[var(--tt-text-tertiary)] transition-colors hover:text-white"
+              className="flex size-9 items-center justify-center rounded-lg border transition-colors"
+              style={{ borderColor: "var(--tt-border)", color: "var(--tt-text-secondary)" }}
             >
               {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="flex size-9 items-center justify-center rounded-lg" style={{ color: "var(--tt-text-tertiary, #71717A)" }}>
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="flex size-9 items-center justify-center rounded-lg border transition-colors" style={{ borderColor: "var(--tt-border)", color: "var(--tt-text-secondary)" }}>
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
