@@ -198,12 +198,21 @@ export default function DashboardLayout({
             {getGreeting()},{" "}
             {capitalize(profile?.first_name) || "there"}
           </p>
-          <button
-            className="relative flex size-8 items-center justify-center rounded-lg transition-colors"
-            style={{ color: "var(--tt-text-tertiary)" }}
-          >
-            <Bell size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              className="flex size-8 items-center justify-center rounded-lg transition-colors"
+              style={{ color: "var(--tt-text-tertiary)" }}
+            >
+              {mounted && (theme === "dark" ? <Sun size={15} /> : <Moon size={15} />)}
+            </button>
+            <button
+              className="relative flex size-8 items-center justify-center rounded-lg transition-colors"
+              style={{ color: "var(--tt-text-tertiary)" }}
+            >
+              <Bell size={16} />
+            </button>
+          </div>
         </header>
 
         {/* Desktop Header */}

@@ -504,6 +504,13 @@ export default function AdminLayout({
         </div>
         <div className="flex items-center gap-1.5">
           <button
+            onClick={toggleTheme}
+            className="flex size-8 items-center justify-center rounded-lg transition-colors"
+            style={{ color: "var(--tt-text-tertiary)" }}
+          >
+            {mounted && (theme === "dark" ? <Sun size={15} /> : <Moon size={15} />)}
+          </button>
+          <button
             className="relative flex size-8 items-center justify-center rounded-lg transition-colors"
             style={{ color: "var(--tt-text-tertiary)" }}
           >
