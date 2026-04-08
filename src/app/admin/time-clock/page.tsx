@@ -14,7 +14,7 @@ export default async function TimeClockPage() {
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   weekStart.setHours(0, 0, 0, 0);
 
-  const [{ data: activeEntries }, { data: payRates }, { data: locations }, { data: recentClockIns }, { data: jobSites }] = await Promise.all([
+  const [{ data: activeEntries }, { data: payRates }, { data: locations }, { data: recentClockIns }, { data: jobSites }, { data: myEntry }, { data: myBreak }] = await Promise.all([
     supabase.from("time_entries")
       .select("id, profile_id, clock_in, total_break_minutes, clock_in_on_site, clock_in_latitude, clock_in_longitude, profiles!time_entries_profile_id_fkey(first_name, last_name, department_id, departments(name))")
       .eq("organization_id", orgId).eq("status", "active").is("clock_out", null).order("clock_in"),
@@ -27,7 +27,14 @@ export default async function TimeClockPage() {
       .order("clock_in", { ascending: false }).limit(50),
     supabase.from("job_sites").select("id, name, latitude, longitude, radius_meters, expires_at")
       .eq("organization_id", orgId).eq("is_active", true).gt("expires_at", new Date().toISOString()),
+    supabase.from("time_entries").select("id, clock_in, total_break_minutes")
+      .eq("profile_id", user.id).eq("status", "active").is("clock_out", null).maybeSingle(),
+    supabase.from("breaks").select("id, start_time")
+      .eq("profile_id", user.id).is("end_time", null).order("start_time", { ascending: false }).limit(1).maybeSingle(),
   ]);
+
+  const myPayRate = (payRates ?? []).find((r: any) => r.profile_id === user.id);
+  const myHourlyRate = myPayRate ? (myPayRate.type === "salary" ? Number(myPayRate.rate) / 2080 : Number(myPayRate.rate)) : 0;
 
   return (
     <TimeClockClient
@@ -36,6 +43,9 @@ export default async function TimeClockPage() {
       locations={locations ?? []}
       recentClockIns={(recentClockIns ?? []) as any}
       jobSites={(jobSites ?? []) as any}
+      myEntry={myEntry ? { id: myEntry.id, clock_in: myEntry.clock_in, total_break_minutes: myEntry.total_break_minutes ?? 0 } : null}
+      myBreak={myBreak ? { id: myBreak.id, start_time: myBreak.start_time } : null}
+      myHourlyRate={myHourlyRate}
     />
   );
 }

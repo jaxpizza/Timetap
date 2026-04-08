@@ -134,6 +134,11 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/admin")) {
     if (isEmployee) return redirectTo("/dashboard");
     if (!hasOrg) return redirectTo("/onboarding");
+    // Restrict sensitive admin routes to owner/admin (not manager)
+    const isManager = role === "manager";
+    if (isManager && (pathname.startsWith("/admin/payroll") || pathname.startsWith("/admin/settings") || pathname.startsWith("/admin/ai"))) {
+      return redirectTo("/admin");
+    }
     return response;
   }
 

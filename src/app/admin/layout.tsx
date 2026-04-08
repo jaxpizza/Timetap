@@ -52,16 +52,13 @@ function capitalize(s?: string) {
 
 /* ── data ── */
 
-interface NavSection {
+interface NavItem {
   label: string;
-  items: {
-    label: string;
-    icon: React.ComponentType<
-      React.SVGProps<SVGSVGElement> & { size?: number | string }
-    >;
-    href: string;
-  }[];
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement> & { size?: number | string }>;
+  href: string;
+  roles?: string[]; // if set, only these roles see it. If unset, all admin+ roles see it.
 }
+interface NavSection { label: string; items: NavItem[] }
 
 const navSections: NavSection[] = [
   {
@@ -78,7 +75,7 @@ const navSections: NavSection[] = [
   },
   {
     label: "FINANCE",
-    items: [{ label: "Payroll", icon: DollarSign, href: "/admin/payroll" }],
+    items: [{ label: "Payroll", icon: DollarSign, href: "/admin/payroll", roles: ["owner", "admin"] }],
   },
   {
     label: "PLANNING",
@@ -90,8 +87,8 @@ const navSections: NavSection[] = [
   {
     label: "OTHER",
     items: [
-      { label: "AI Assistant", icon: Sparkles, href: "/admin/ai" },
-      { label: "Settings", icon: Settings, href: "/admin/settings" },
+      { label: "AI Assistant", icon: Sparkles, href: "/admin/ai", roles: ["owner", "admin"] },
+      { label: "Settings", icon: Settings, href: "/admin/settings", roles: ["owner", "admin"] },
     ],
   },
 ];
@@ -233,6 +230,13 @@ function SidebarContent({
 }) {
   const pathname = usePathname();
   const { toggle } = useSidebarStore();
+  const userRole = profile?.role ?? "employee";
+
+  // Filter nav items by role
+  const filteredSections = navSections.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => !item.roles || item.roles.includes(userRole)),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <div className="flex h-full flex-col">
@@ -269,7 +273,7 @@ function SidebarContent({
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2">
         <TooltipProvider>
-          {navSections.map((section, sIdx) => (
+          {filteredSections.map((section, sIdx) => (
             <div key={section.label}>
               {sIdx > 0 && <GradientDivider className={collapsed ? "mx-3 my-2" : "mx-4 mb-2"} />}
               {!collapsed && (

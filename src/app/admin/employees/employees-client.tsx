@@ -433,9 +433,14 @@ function EmployeeCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44 rounded-xl p-1 shadow-xl" style={{ backgroundColor: "var(--tt-dropdown-bg)", borderColor: "var(--tt-border)" }}>
             {isSelf ? (
-              <DropdownMenuItem className="gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>
-                <Pencil size={14} /> Edit Profile
-              </DropdownMenuItem>
+              <>
+                <DropdownMenuItem onClick={onEdit} className="gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>
+                  <Pencil size={14} /> Edit Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.location.href = `/admin/employees/${emp.id}`} className="gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>
+                  <FileText size={14} /> View Profile
+                </DropdownMenuItem>
+              </>
             ) : (
               <>
                 <DropdownMenuItem onClick={onEdit} className="gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>
