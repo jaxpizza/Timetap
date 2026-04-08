@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { DollarSign, Lock, Play, Download, ChevronDown, ChevronUp, Loader2, Plus, FileText, FileSpreadsheet, Receipt } from "lucide-react";
+import { DollarSign, Lock, Play, ChevronDown, ChevronUp, Loader2, Plus, FileText, FileSpreadsheet, Receipt, Trash2, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { createPayPeriod, lockPayPeriod, calculatePayroll, approvePayroll, exportPayrollCSV, generatePayrollReport, generatePayStubs } from "./actions";
+import { createPayPeriod, deletePayPeriod, lockPayPeriod, calculatePayroll, approvePayroll, exportPayrollCSV, generatePayrollReport, generatePayStubs } from "./actions";
 import { PayrollCalendarPicker } from "@/components/payroll-calendar-picker";
 
 interface PayPeriod {
@@ -55,6 +56,14 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
     const r = await createPayPeriod({ organizationId, startDate, endDate });
     setLoading(null);
     if (r.success) { toast.success("Pay period created"); setCreating(false); router.refresh(); }
+    else toast.error(r.error || "Failed");
+  }
+
+  async function handleDelete(id: string) {
+    setLoading("delete");
+    const r = await deletePayPeriod(id);
+    setLoading(null);
+    if (r.success) { toast.success("Pay period discarded"); setEntries(null); router.refresh(); }
     else toast.error(r.error || "Failed");
   }
 
@@ -186,6 +195,11 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <button onClick={() => handleDelete(openPeriod.id)} disabled={loading === "delete"}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 transition-colors hover:bg-rose-500/10"
+                  style={{ border: "1px solid rgba(251,113,133,0.2)" }}>
+                  {loading === "delete" ? <Loader2 className="size-3 animate-spin" /> : <Trash2 size={13} />} Discard
+                </button>
                 {openPeriod.status === "open" && (
                   <button onClick={() => handleLock(openPeriod.id)} disabled={loading === "lock"}
                     className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
@@ -205,10 +219,23 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
           {entries && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               {entries.length === 0 ? (
-                <div className="rounded-xl py-16 text-center" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+                <div className="rounded-xl py-12 text-center" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
                   <DollarSign size={28} strokeWidth={1.5} style={{ color: "var(--tt-text-muted)" }} className="mx-auto" />
-                  <p className="mt-3 text-sm" style={{ color: "var(--tt-text-muted)" }}>No approved time entries found for this period</p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--tt-text-faint)" }}>Approve timesheets first, then calculate payroll</p>
+                  <p className="mt-3 text-sm font-medium" style={{ color: "var(--tt-text-primary)" }}>No approved time entries found</p>
+                  <p className="mx-auto mt-1 max-w-xs text-xs" style={{ color: "var(--tt-text-muted)" }}>
+                    Approve employee timesheets first, then come back to calculate payroll.
+                  </p>
+                  <div className="mt-5 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                    <Link href="/admin/timesheets"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600">
+                      Go to Timesheets <ArrowRight size={14} />
+                    </Link>
+                    <button onClick={() => handleDelete(openPeriod.id)} disabled={loading === "delete"}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-rose-400 transition-colors hover:bg-rose-500/10"
+                      style={{ border: "1px solid rgba(251,113,133,0.2)" }}>
+                      {loading === "delete" ? <Loader2 className="size-3 animate-spin" /> : <Trash2 size={13} />} Discard Period
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-xl" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>

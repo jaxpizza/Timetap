@@ -24,6 +24,22 @@ export async function createPayPeriod(input: {
   return { success: true, id: data.id };
 }
 
+export async function deletePayPeriod(
+  payPeriodId: string
+): Promise<{ success: boolean; error?: string }> {
+  const admin = createAdminClient();
+  // Safety: only delete if no payroll entries exist
+  const { count } = await admin
+    .from("payroll_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("pay_period_id", payPeriodId);
+  if (count && count > 0) return { success: false, error: "Cannot delete a period with processed payroll entries" };
+
+  const { error } = await admin.from("pay_periods").delete().eq("id", payPeriodId);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
 export async function lockPayPeriod(
   payPeriodId: string
 ): Promise<{ success: boolean; error?: string }> {

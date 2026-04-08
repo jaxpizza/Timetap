@@ -92,18 +92,22 @@ export function PayrollCalendarPicker({ existingPeriods, onSelect, payPeriodType
   }
 
   function handleDayClick(day: Date) {
-    if (!startDate || (startDate && endDate)) {
-      // First click or reset
-      setStartDate(day);
+    if (!startDate) {
+      // No selection — start fresh
       const suggested = suggestEndDate(day, payPeriodType);
+      setStartDate(day);
       setEndDate(suggested);
       onSelect(toLocalDateString(day), toLocalDateString(suggested));
-    } else {
-      // Second click — set end date
+    } else if (startDate && isSameDay(day, startDate)) {
+      // Clicking start date again — reset
+      setStartDate(null);
+      setEndDate(null);
+      onSelect("", "");
+    } else if (startDate && endDate) {
+      // Both set — adjust: click before start moves start, click after start moves end
       if (isBefore(day, startDate)) {
         setStartDate(day);
-        onSelect(toLocalDateString(day), toLocalDateString(startDate));
-        setEndDate(startDate);
+        onSelect(toLocalDateString(day), toLocalDateString(endDate));
       } else {
         setEndDate(day);
         onSelect(toLocalDateString(startDate), toLocalDateString(day));
@@ -254,14 +258,23 @@ export function PayrollCalendarPicker({ existingPeriods, onSelect, payPeriodType
 
       {/* Selection summary */}
       {startDate && endDate && (
-        <div className="rounded-lg px-4 py-3" style={{ backgroundColor: "var(--tt-elevated-bg)", border: "1px solid var(--tt-border-faint)" }}>
-          <p className="font-mono text-sm" style={{ color: "var(--tt-text-primary)" }}>
-            Selected: {format(startDate, "MMM d")} — {format(endDate, "MMM d, yyyy")}
-            <span className="ml-2 text-xs" style={{ color: "var(--tt-text-muted)" }}>({selectionDays} days)</span>
-          </p>
-          {overlapWarning && (
-            <p className="mt-1 text-xs text-amber-400">⚠ {overlapWarning}</p>
-          )}
+        <div className="flex items-start justify-between rounded-lg px-4 py-3" style={{ backgroundColor: "var(--tt-elevated-bg)", border: "1px solid var(--tt-border-faint)" }}>
+          <div>
+            <p className="font-mono text-sm" style={{ color: "var(--tt-text-primary)" }}>
+              Selected: {format(startDate, "MMM d")} — {format(endDate, "MMM d, yyyy")}
+              <span className="ml-2 text-xs" style={{ color: "var(--tt-text-muted)" }}>({selectionDays} days)</span>
+            </p>
+            {overlapWarning && (
+              <p className="mt-1 text-xs text-amber-400">⚠ {overlapWarning}</p>
+            )}
+          </div>
+          <button
+            onClick={() => { setStartDate(null); setEndDate(null); onSelect("", ""); }}
+            className="shrink-0 text-xs underline transition-colors hover:text-indigo-400"
+            style={{ color: "var(--tt-text-muted)" }}
+          >
+            Reset
+          </button>
         </div>
       )}
     </div>
