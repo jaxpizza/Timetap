@@ -33,6 +33,7 @@ export function SettingsClient({ org, locations, organizationId }: { org: any; l
   const [otThreshold, setOtThreshold] = useState(String(org?.overtime_threshold_weekly ?? 40));
   const [otMult, setOtMult] = useState(String(org?.overtime_multiplier ?? 1.5));
   const [geofence, setGeofence] = useState(org?.geofence_required ?? false);
+  const [jobSitesOn, setJobSitesOn] = useState(org?.job_sites_enabled ?? false);
   const [inviteCode, setInviteCode] = useState(org?.invite_code ?? "");
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -57,6 +58,12 @@ export function SettingsClient({ org, locations, organizationId }: { org: any; l
     setGeofence(val);
     await updateOrganization(organizationId, { geofence_required: val });
     toast.success(val ? "Location tracking enabled" : "Location tracking disabled");
+  }
+
+  async function toggleJobSites(val: boolean) {
+    setJobSitesOn(val);
+    await updateOrganization(organizationId, { job_sites_enabled: val });
+    toast.success(val ? "Job sites enabled" : "Job sites disabled");
   }
 
   async function handleRegenCode() {
@@ -169,6 +176,30 @@ export function SettingsClient({ org, locations, organizationId }: { org: any; l
                 <Plus size={16} /> Add Work Location
               </button>
             )}
+
+            {/* Temporary Job Sites toggle */}
+            <div className="mt-4 rounded-lg p-4" style={{ backgroundColor: "var(--tt-elevated-bg)", border: "1px solid var(--tt-border-faint)" }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>Temporary Job Sites</p>
+                  <p className="mt-0.5 text-xs" style={{ color: "var(--tt-text-tertiary)" }}>
+                    Enable adding temporary work locations from the dashboard
+                  </p>
+                </div>
+                <button
+                  onClick={() => toggleJobSites(!jobSitesOn)}
+                  className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
+                  style={{ backgroundColor: jobSitesOn ? "#14B8A6" : "var(--tt-border)" }}
+                  role="switch"
+                  aria-checked={jobSitesOn}
+                >
+                  <span
+                    className="pointer-events-none block size-5 rounded-full shadow-sm transition-transform duration-200"
+                    style={{ backgroundColor: "#fff", transform: jobSitesOn ? "translateX(22px)" : "translateX(2px)" }}
+                  />
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </div>

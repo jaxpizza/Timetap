@@ -11,6 +11,7 @@ export async function updateOrganization(
     overtime_threshold_weekly?: number;
     overtime_multiplier?: number;
     geofence_required?: boolean;
+    job_sites_enabled?: boolean;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const admin = createAdminClient();

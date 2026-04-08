@@ -87,6 +87,7 @@ interface Props {
   offSiteToday?: number;
   jobSites?: JobSite[];
   organizationId?: string;
+  jobSitesEnabled?: boolean;
 }
 
 /* ── helpers ── */
@@ -217,7 +218,7 @@ export function AdminDashboardClient({
   greeting, firstName, orgName,
   totalEmployees, activeNow, todayHours, todayLaborCost,
   pendingTimesheets, pendingPto, pendingEdits, nextPayPeriod, recentActivity, weekData, upcomingSchedules = [], offSiteToday = 0,
-  jobSites = [], organizationId = "",
+  jobSites = [], organizationId = "", jobSitesEnabled = false,
 }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -299,6 +300,34 @@ export function AdminDashboardClient({
             <MapPin size={14} /> {offSiteToday} off-site clock-in{offSiteToday > 1 ? "s" : ""} today
             <span className="ml-auto" style={{ color: "var(--tt-text-muted)" }}>View details →</span>
           </Link>
+        )}
+
+        {/* Add Job Site Banner */}
+        {jobSitesEnabled && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="flex flex-col gap-3 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between"
+            style={{ backgroundColor: "rgba(20,184,166,0.08)", border: "1px solid rgba(20,184,166,0.2)" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "rgba(20,184,166,0.15)" }}>
+                <MapPin size={18} className="text-teal-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>Add Job Site</p>
+                  {jobSites.length > 0 && (
+                    <span className="rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] font-bold text-teal-400">{jobSites.length} active</span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs" style={{ color: "var(--tt-text-tertiary)" }}>Track clock-ins at a temporary work location</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setAddJobSiteOpen(true)}
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-600 sm:w-auto"
+            >
+              Add Site <ChevronRight size={14} />
+            </button>
+          </motion.div>
         )}
 
         {/* Stats */}
@@ -454,44 +483,28 @@ export function AdminDashboardClient({
           </motion.div>
         </motion.div>
 
-        {/* Job Sites */}
+        {/* Active Job Sites list */}
+        {jobSitesEnabled && jobSites.length > 0 && (
         <motion.div variants={section(0.7)} initial="hidden" animate="show">
           <motion.div variants={rise} className="overflow-hidden rounded-xl" style={cardStyle}>
             <div className="flex items-center justify-between px-4 py-3 sm:px-5" style={{ borderBottom: "1px solid var(--tt-border-faint)" }}>
               <div className="flex items-center gap-2">
                 <MapPin size={14} className="text-teal-400" />
                 <h2 className="text-sm font-semibold tracking-wide" style={{ color: "var(--tt-text-secondary)" }}>Active Job Sites</h2>
-                {jobSites.length > 0 && (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-teal-500/15 text-[10px] font-bold text-teal-400">{jobSites.length}</span>
-                )}
+                <span className="flex size-5 items-center justify-center rounded-full bg-teal-500/15 text-[10px] font-bold text-teal-400">{jobSites.length}</span>
               </div>
-              <button
-                onClick={() => setAddJobSiteOpen(true)}
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-teal-400 transition-colors hover:bg-teal-500/10"
-                style={{ border: "1px solid rgba(20,184,166,0.2)" }}
-              >
-                <MapPin size={12} /> Add Site
-              </button>
             </div>
-
-            {jobSites.length === 0 ? (
-              <div className="flex flex-col items-center py-8">
-                <MapPin size={24} strokeWidth={1.5} style={{ color: "var(--tt-text-muted)" }} />
-                <p className="mt-3 text-sm" style={{ color: "var(--tt-text-muted)" }}>No active job sites</p>
-                <p className="mt-1 text-xs" style={{ color: "var(--tt-text-faint)" }}>Add one to track on-site clock-ins for temporary locations</p>
-              </div>
-            ) : (
-              <div>
-                {jobSites.slice(0, 5).map((site, i) => (
-                  <JobSiteRow key={site.id} site={site} isLast={i === Math.min(jobSites.length, 5) - 1} onRefresh={() => router.refresh()} />
-                ))}
-                {jobSites.length > 5 && (
-                  <p className="py-2 text-center text-xs text-indigo-400">+ {jobSites.length - 5} more</p>
-                )}
-              </div>
-            )}
+            <div>
+              {jobSites.slice(0, 5).map((site, i) => (
+                <JobSiteRow key={site.id} site={site} isLast={i === Math.min(jobSites.length, 5) - 1} onRefresh={() => router.refresh()} />
+              ))}
+              {jobSites.length > 5 && (
+                <p className="py-2 text-center text-xs text-indigo-400">+ {jobSites.length - 5} more</p>
+              )}
+            </div>
           </motion.div>
         </motion.div>
+        )}
       </div>
 
       <AddJobSiteSheet open={addJobSiteOpen} onOpenChange={setAddJobSiteOpen} organizationId={organizationId} />

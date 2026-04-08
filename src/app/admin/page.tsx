@@ -41,7 +41,7 @@ export default async function AdminDashboardPage() {
   ] = await Promise.all([
     supabase
       .from("organizations")
-      .select("name, invite_code")
+      .select("name, invite_code, job_sites_enabled")
       .eq("id", orgId)
       .single(),
     // Use select with count instead of head:true so we get data back
@@ -242,6 +242,7 @@ export default async function AdminDashboardPage() {
       offSiteToday={(offSiteResult.data ?? []).length}
       jobSites={(jobSitesResult.data ?? []) as any}
       organizationId={orgId}
+      jobSitesEnabled={org?.job_sites_enabled ?? false}
     />
   );
 }
