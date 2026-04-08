@@ -1,6 +1,46 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { calculateDistance } from "@/lib/utils";
+
+async function retroactiveOnSiteCheck(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  latitude: number,
+  longitude: number,
+  radiusMeters: number
+): Promise<number> {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const { data: entries } = await admin
+    .from("time_entries")
+    .select("id, clock_in_latitude, clock_in_longitude, clock_in_on_site, clock_out_latitude, clock_out_longitude, clock_out_on_site")
+    .eq("organization_id", organizationId)
+    .gte("clock_in", startOfToday.toISOString())
+    .not("clock_in_latitude", "is", null);
+
+  let updated = 0;
+  for (const entry of entries ?? []) {
+    const updates: Record<string, boolean> = {};
+
+    if (entry.clock_in_latitude && entry.clock_in_longitude && !entry.clock_in_on_site) {
+      const dist = calculateDistance(Number(entry.clock_in_latitude), Number(entry.clock_in_longitude), latitude, longitude);
+      if (dist <= radiusMeters) updates.clock_in_on_site = true;
+    }
+
+    if (entry.clock_out_latitude && entry.clock_out_longitude && !entry.clock_out_on_site) {
+      const dist = calculateDistance(Number(entry.clock_out_latitude), Number(entry.clock_out_longitude), latitude, longitude);
+      if (dist <= radiusMeters) updates.clock_out_on_site = true;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await admin.from("time_entries").update(updates).eq("id", entry.id);
+      updated++;
+    }
+  }
+  return updated;
+}
 
 export async function updateOrganization(
   orgId: string,
@@ -44,6 +84,12 @@ export async function createLocation(input: {
     radius_meters: input.radius_meters,
   });
   if (error) return { success: false, error: error.message };
+
+  // Retroactively update today's clock-ins near this new location
+  if (input.latitude && input.longitude) {
+    retroactiveOnSiteCheck(admin, input.organizationId, input.latitude, input.longitude, input.radius_meters).catch(() => {});
+  }
+
   return { success: true };
 }
 
@@ -54,6 +100,13 @@ export async function updateLocation(
   const admin = createAdminClient();
   const { error } = await admin.from("locations").update(updates).eq("id", locationId);
   if (error) return { success: false, error: error.message };
+
+  // Retroactively check today's clock-ins against the updated location
+  const { data: loc } = await admin.from("locations").select("organization_id, latitude, longitude, radius_meters").eq("id", locationId).single();
+  if (loc?.latitude && loc?.longitude) {
+    retroactiveOnSiteCheck(admin, loc.organization_id, Number(loc.latitude), Number(loc.longitude), Number(loc.radius_meters ?? 402)).catch(() => {});
+  }
+
   return { success: true };
 }
 
