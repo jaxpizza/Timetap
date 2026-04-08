@@ -68,6 +68,15 @@ export async function middleware(request: NextRequest) {
     return redirectTo("/onboarding");
   }
 
+  const SUPER_ADMIN_EMAIL = "jacob.wendling29@yahoo.com";
+
+  // Super admin routes
+  if (pathname.startsWith("/super-admin")) {
+    if (!user) return redirectTo("/auth/login");
+    if (user.email !== SUPER_ADMIN_EMAIL) return redirectTo("/");
+    return response;
+  }
+
   // Root — show landing page to unauthenticated users
   if (pathname === "/") {
     if (!user) return response; // Let them see the landing page

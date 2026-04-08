@@ -1,0 +1,194 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { ArrowLeft, Building2, Users, Clock, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { formatHours, getInitials } from "@/lib/utils";
+import { getOrganizationDetail, superUpdateOrganization, superDeleteOrganization } from "../../actions";
+
+function capitalize(s?: string | null) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
+
+const roleBadge: Record<string, { bg: string; text: string }> = {
+  owner: { bg: "rgba(251,191,36,0.15)", text: "#FBBF24" },
+  admin: { bg: "rgba(129,140,248,0.15)", text: "#818CF8" },
+  manager: { bg: "rgba(52,211,153,0.15)", text: "#34D399" },
+  employee: { bg: "rgba(113,113,122,0.15)", text: "#A1A1AA" },
+};
+
+export default function OrgDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const orgId = params.id as string;
+  const [data, setData] = useState<any>(null);
+  const [tab, setTab] = useState<"employees" | "entries" | "payroll">("employees");
+  const [loading, setLoading] = useState<string | null>(null);
+  const [tier, setTier] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+
+  useEffect(() => {
+    getOrganizationDetail(orgId).then((d) => { setData(d); setTier(d.org?.subscription_tier ?? "free"); });
+  }, [orgId]);
+
+  async function handleTierChange(newTier: string) {
+    setTier(newTier);
+    const r = await superUpdateOrganization(orgId, { subscription_tier: newTier });
+    r.success ? toast.success("Tier updated") : toast.error(r.error || "Failed");
+  }
+
+  async function handleDelete() {
+    if (deleteConfirm !== data?.org?.name) { toast.error("Type the org name to confirm"); return; }
+    setLoading("delete");
+    const r = await superDeleteOrganization(orgId);
+    setLoading(null);
+    if (r.success) { toast.success("Organization deleted"); router.push("/super-admin/organizations"); }
+    else toast.error(r.error || "Failed");
+  }
+
+  if (!data) return <p className="py-12 text-center text-sm" style={{ color: "var(--tt-text-muted)" }}>Loading...</p>;
+  const { org, employees, entries, payPeriods } = data;
+
+  const tabs = [
+    { key: "employees" as const, label: "Employees", count: employees.length },
+    { key: "entries" as const, label: "Time Entries", count: entries.length },
+    { key: "payroll" as const, label: "Payroll", count: payPeriods.length },
+  ];
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <Link href="/super-admin/organizations" className="mt-1 flex size-8 items-center justify-center rounded-lg" style={{ color: "var(--tt-text-tertiary)" }}>
+          <ArrowLeft size={18} />
+        </Link>
+        <div>
+          <h1 className="font-heading text-2xl font-bold" style={{ color: "var(--tt-text-primary)" }}>{org?.name}</h1>
+          <p className="mt-0.5 text-sm" style={{ color: "var(--tt-text-muted)" }}>
+            {org?.timezone} · Invite: {org?.invite_code} · Created {org?.created_at ? format(new Date(org.created_at), "MMM d, yyyy") : "—"}
+          </p>
+        </div>
+      </div>
+
+      {/* Org Settings */}
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--tt-text-muted)" }}>Subscription Tier</p>
+          <select value={tier} onChange={(e) => handleTierChange(e.target.value)}
+            className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
+            <option value="free">Free</option>
+            <option value="pro">Pro</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--tt-text-muted)" }}>Pay Period</p>
+          <p className="mt-2 font-mono text-sm capitalize" style={{ color: "var(--tt-text-primary)" }}>{org?.pay_period_type ?? "biweekly"}</p>
+          <p className="text-xs" style={{ color: "var(--tt-text-muted)" }}>OT: {org?.overtime_threshold_weekly ?? 40}h @ {org?.overtime_multiplier ?? 1.5}x</p>
+        </div>
+        <div className="rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--tt-text-muted)" }}>Features</p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {org?.geofence_required && <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] text-indigo-400">Geofence</span>}
+            {org?.job_sites_enabled && <span className="rounded-full bg-teal-500/15 px-2 py-0.5 text-[10px] text-teal-400">Job Sites</span>}
+            {!org?.geofence_required && !org?.job_sites_enabled && <span className="text-xs" style={{ color: "var(--tt-text-faint)" }}>None enabled</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="mt-6 flex gap-1 rounded-lg p-1" style={{ backgroundColor: "var(--tt-elevated-bg)" }}>
+        {tabs.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all ${tab === t.key ? "shadow-sm" : ""}`}
+            style={{ backgroundColor: tab === t.key ? "var(--tt-card-bg)" : "transparent", color: tab === t.key ? "var(--tt-text-primary)" : "var(--tt-text-muted)" }}>
+            {t.label} <span className="ml-1 text-xs" style={{ color: "var(--tt-text-faint)" }}>({t.count})</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="mt-4">
+        {tab === "employees" && (
+          <div className="space-y-2">
+            {employees.map((emp: any) => {
+              const badge = roleBadge[emp.role] ?? roleBadge.employee;
+              const rate = emp.pay_rates?.find((r: any) => r.is_primary);
+              return (
+                <div key={emp.id} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px] font-bold text-white">
+                      {getInitials(emp.first_name, emp.last_name)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: "var(--tt-text-primary)" }}>{capitalize(emp.first_name)} {capitalize(emp.last_name)}</p>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize" style={{ backgroundColor: badge.bg, color: badge.text }}>{emp.role}</span>
+                        <span className="text-[10px]" style={{ color: "var(--tt-text-muted)" }}>{emp.email}</span>
+                        {emp.departments?.name && <span className="text-[10px]" style={{ color: "var(--tt-text-faint)" }}>{emp.departments.name}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {rate && <p className="font-mono text-xs" style={{ color: "var(--tt-text-tertiary)" }}>${Number(rate.rate).toFixed(2)}{rate.type === "hourly" ? "/hr" : "/yr"}</p>}
+                    <span className="size-1.5 inline-block rounded-full" style={{ backgroundColor: emp.is_active ? "#34D399" : "var(--tt-text-faint)" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "entries" && (
+          <div className="space-y-1">
+            {entries.map((e: any) => (
+              <div key={e.id} className="flex items-center justify-between rounded-lg px-4 py-2" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-faint)" }}>
+                <div className="flex items-center gap-3">
+                  <p className="text-xs" style={{ color: "var(--tt-text-primary)" }}>{format(new Date(e.clock_in), "MMM d, h:mm a")}</p>
+                  <span className="rounded-full px-2 py-0.5 text-[9px] font-semibold capitalize"
+                    style={{ backgroundColor: e.status === "approved" ? "rgba(52,211,153,0.1)" : "rgba(251,191,36,0.1)", color: e.status === "approved" ? "#34D399" : "#FBBF24" }}>
+                    {e.status}
+                  </span>
+                </div>
+                <p className="font-mono text-xs" style={{ color: "var(--tt-text-tertiary)" }}>{e.total_hours ? `${Number(e.total_hours).toFixed(1)}h` : "active"}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === "payroll" && (
+          <div className="space-y-2">
+            {payPeriods.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+                <div>
+                  <p className="font-mono text-sm" style={{ color: "var(--tt-text-primary)" }}>{p.start_date} — {p.end_date}</p>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize" style={{ backgroundColor: "rgba(113,113,122,0.1)", color: "#71717A" }}>{p.status}</span>
+                </div>
+                {p.total_gross_pay && <p className="font-mono text-sm text-emerald-400">${Number(p.total_gross_pay).toFixed(2)}</p>}
+              </div>
+            ))}
+            {payPeriods.length === 0 && <p className="py-8 text-center text-xs" style={{ color: "var(--tt-text-muted)" }}>No pay periods</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Danger zone */}
+      <div className="mt-8 rounded-xl p-5" style={{ border: "1px solid rgba(251,113,133,0.2)", backgroundColor: "rgba(251,113,133,0.04)" }}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-rose-400">Danger Zone</p>
+        <p className="mt-2 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>Delete this organization and all its data. This cannot be undone.</p>
+        <div className="mt-3 flex items-center gap-2">
+          <input value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder={`Type "${org?.name}" to confirm`}
+            className="flex-1 rounded-lg border px-3 py-2 text-sm"
+            style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }} />
+          <button onClick={handleDelete} disabled={loading === "delete" || deleteConfirm !== org?.name}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-600 disabled:opacity-50">
+            {loading === "delete" ? <Loader2 className="size-3 animate-spin" /> : <Trash2 size={14} />} Delete
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}

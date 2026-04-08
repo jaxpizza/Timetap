@@ -23,6 +23,7 @@ import {
   LogOut,
   User,
   Search,
+  Shield,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/components/theme-provider";
@@ -222,11 +223,13 @@ function SidebarContent({
   profile,
   onSignOut,
   onNavClick,
+  isSuperAdmin = false,
 }: {
   collapsed: boolean;
   profile: { first_name?: string; last_name?: string; role?: string } | null;
   onSignOut: () => void;
   onNavClick?: () => void;
+  isSuperAdmin?: boolean;
 }) {
   const pathname = usePathname();
   const { toggle } = useSidebarStore();
@@ -296,6 +299,25 @@ function SidebarContent({
               </div>
             </div>
           ))}
+          {isSuperAdmin && (
+            <>
+              <GradientDivider className={collapsed ? "mx-3 my-2" : "mx-4 mb-2"} />
+              <Link
+                href="/super-admin"
+                className={`flex items-center gap-3 rounded-xl transition-all duration-200 ${
+                  collapsed ? "mx-2 justify-center px-2 py-2" : "mx-3 px-3 py-2"
+                }`}
+                style={{
+                  backgroundColor: "rgba(244,63,94,0.06)",
+                  border: "1px solid rgba(244,63,94,0.15)",
+                  color: "#FB7185",
+                }}
+              >
+                <Shield size={collapsed ? 18 : 16} />
+                {!collapsed && <span className="text-xs font-semibold">Platform Admin</span>}
+              </Link>
+            </>
+          )}
         </TooltipProvider>
       </nav>
 
@@ -416,12 +438,14 @@ export default function AdminLayout({
   const [mounted, setMounted] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
+        if (user.email === "jacob.wendling29@yahoo.com") setIsSuperAdmin(true);
         supabase
           .from("profiles")
           .select("first_name, last_name, role")
@@ -472,6 +496,7 @@ export default function AdminLayout({
           collapsed={collapsed}
           profile={profile}
           onSignOut={handleSignOut}
+          isSuperAdmin={isSuperAdmin}
         />
       </motion.aside>
 
@@ -536,6 +561,7 @@ export default function AdminLayout({
             profile={profile}
             onSignOut={handleSignOut}
             onNavClick={() => setMobileOpen(false)}
+            isSuperAdmin={isSuperAdmin}
           />
         </SheetContent>
       </Sheet>
