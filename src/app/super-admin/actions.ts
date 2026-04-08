@@ -126,17 +126,31 @@ export async function transferOwnership(
   await verifySuperAdmin();
   const admin = createAdminClient();
 
-  // Update new owner
-  const { error: e1 } = await admin.from("profiles").update({ role: "owner" }).eq("id", newOwnerId);
-  if (e1) return { success: false, error: e1.message };
+  console.log("=== TRANSFER OWNERSHIP START ===", { orgId, newOwnerId, oldOwnerId });
 
-  // Demote old owner to admin
-  const { error: e2 } = await admin.from("profiles").update({ role: "admin" }).eq("id", oldOwnerId);
-  if (e2) return { success: false, error: e2.message };
+  // Step 1: Update new owner
+  const r1 = await admin.from("profiles").update({ role: "owner" }).eq("id", newOwnerId);
+  console.log("Step 1 - Set new owner role:", r1.error?.message || "SUCCESS");
+  if (r1.error) return { success: false, error: r1.error.message };
 
-  // Update org owner_id
-  const { error: e3 } = await admin.from("organizations").update({ owner_id: newOwnerId }).eq("id", orgId);
-  if (e3) return { success: false, error: e3.message };
+  // Step 2: Demote old owner to admin (skip if same person)
+  if (oldOwnerId && oldOwnerId !== newOwnerId) {
+    const r2 = await admin.from("profiles").update({ role: "admin" }).eq("id", oldOwnerId);
+    console.log("Step 2 - Demote old owner:", r2.error?.message || "SUCCESS");
+    if (r2.error) return { success: false, error: r2.error.message };
+  } else {
+    console.log("Step 2 - Skipped (same person or no old owner)");
+  }
+
+  // Step 3: Update org owner_id
+  const r3 = await admin.from("organizations").update({ owner_id: newOwnerId }).eq("id", orgId);
+  console.log("Step 3 - Update org owner_id:", r3.error?.message || "SUCCESS");
+  if (r3.error) return { success: false, error: r3.error.message };
+
+  // Verify
+  const { data: verify } = await admin.from("profiles").select("role").eq("id", newOwnerId).single();
+  console.log("Verification - new owner role is now:", verify?.role);
+  console.log("=== TRANSFER OWNERSHIP END ===");
 
   return { success: true };
 }

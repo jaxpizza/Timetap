@@ -244,14 +244,17 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
     }
 
     setLoading(true);
+    console.log("Save handler:", { isChangingToOwner, role, employeeRole: employee.role, currentOwnerId });
 
-    // When transferring ownership, do that FIRST, then update other fields WITHOUT the role
+    // When transferring ownership, ONLY call transferOwnership — it handles the role
     if (isChangingToOwner) {
+      console.log("Calling transferOwnership:", { orgId, newOwnerId: employee.id, oldOwnerId: currentOwnerId });
       const tr = await transferOwnership(orgId, employee.id, currentOwnerId);
+      console.log("Transfer result:", tr);
       if (!tr.success) { setLoading(false); toast.error(tr.error || "Transfer failed"); return; }
     }
 
-    // Update profile fields — exclude role when transferring ownership (transferOwnership already set it)
+    // Update non-role profile fields (NEVER include role here — transferOwnership already handled it if needed)
     const profileUpdates: Record<string, any> = {
       first_name: firstName, last_name: lastName, phone: phone || null,
       department_id: deptId || null,
@@ -262,10 +265,17 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
       join_status: joinStatus,
       hire_date: hireDate || null,
     };
+    // Only set role if NOT an ownership transfer
     if (!isChangingToOwner) {
       profileUpdates.role = role;
     }
+    // Safety: absolutely ensure role is not in the update if transferring
+    if (isChangingToOwner && "role" in profileUpdates) {
+      delete profileUpdates.role;
+    }
+    console.log("Calling superUpdateProfile with:", Object.keys(profileUpdates), "role in updates?", "role" in profileUpdates);
     const r = await superUpdateProfile(employee.id, profileUpdates);
+    console.log("Profile update result:", r);
 
     // Update pay rate
     if (Number(payRate) > 0) {
