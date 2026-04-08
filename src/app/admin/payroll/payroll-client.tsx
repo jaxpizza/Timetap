@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { DollarSign, Lock, Play, Download, ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react";
+import { DollarSign, Lock, Play, Download, ChevronDown, ChevronUp, Loader2, Plus, FileText, FileSpreadsheet, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, differenceInDays } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createPayPeriod, lockPayPeriod, calculatePayroll, approvePayroll, exportPayrollCSV } from "./actions";
+import { createPayPeriod, lockPayPeriod, calculatePayroll, approvePayroll, exportPayrollCSV, generatePayrollReport, generatePayStubs } from "./actions";
 
 interface PayPeriod {
   id: string; start_date: string; end_date: string; status: string;
@@ -88,17 +88,37 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
     else toast.error(r.error || "Failed");
   }
 
-  async function handleExport(periodId: string) {
-    setLoading("export");
+  async function handleExportCSV(periodId: string) {
+    setLoading("csv");
     const r = await exportPayrollCSV(periodId);
     setLoading(null);
     if (r.success && r.csv) {
-      const blob = new Blob([r.csv], { type: "text/csv" });
+      const blob = new Blob([r.csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = `payroll-${periodId}.csv`; a.click();
+      a.href = url; a.download = r.filename ?? `payroll.csv`; a.click();
       URL.revokeObjectURL(url);
-      toast.success("CSV exported");
+      toast.success("CSV downloaded");
+    } else toast.error(r.error || "Failed");
+  }
+
+  async function handlePrintReport(periodId: string) {
+    setLoading("report");
+    const r = await generatePayrollReport(periodId);
+    setLoading(null);
+    if (r.success && r.html) {
+      const w = window.open("", "_blank");
+      if (w) { w.document.write(r.html); w.document.close(); }
+    } else toast.error(r.error || "Failed");
+  }
+
+  async function handlePrintStubs(periodId: string) {
+    setLoading("stubs");
+    const r = await generatePayStubs(periodId);
+    setLoading(null);
+    if (r.success && r.html) {
+      const w = window.open("", "_blank");
+      if (w) { w.document.write(r.html); w.document.close(); }
     } else toast.error(r.error || "Failed");
   }
 
@@ -238,7 +258,24 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
                   )}
 
                   {/* Actions */}
-                  <div className="flex items-center justify-end gap-2 px-4 py-4" style={{ borderTop: "1px solid var(--tt-border-faint)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-4" style={{ borderTop: "1px solid var(--tt-border-faint)" }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={() => handleExportCSV(openPeriod.id)} disabled={loading === "csv"}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                        style={{ border: "1px solid var(--tt-border-subtle)", color: "var(--tt-text-tertiary)" }}>
+                        {loading === "csv" ? <Loader2 className="size-3 animate-spin" /> : <FileSpreadsheet size={13} />} Download CSV
+                      </button>
+                      <button onClick={() => handlePrintReport(openPeriod.id)} disabled={loading === "report"}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                        style={{ border: "1px solid var(--tt-border-subtle)", color: "var(--tt-text-tertiary)" }}>
+                        {loading === "report" ? <Loader2 className="size-3 animate-spin" /> : <FileText size={13} />} Print Report
+                      </button>
+                      <button onClick={() => handlePrintStubs(openPeriod.id)} disabled={loading === "stubs"}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                        style={{ border: "1px solid var(--tt-border-subtle)", color: "var(--tt-text-tertiary)" }}>
+                        {loading === "stubs" ? <Loader2 className="size-3 animate-spin" /> : <Receipt size={13} />} Pay Stubs
+                      </button>
+                    </div>
                     <button onClick={() => handleApprove(openPeriod)} disabled={loading === "approve"}
                       className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600">
                       {loading === "approve" ? <Loader2 className="size-4 animate-spin" /> : "Approve Payroll"}
@@ -271,12 +308,28 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
                       <p className="font-mono text-xs text-emerald-400">{$(p.total_gross_pay ?? 0)}</p>
                       <p className="text-[10px]" style={{ color: "var(--tt-text-muted)" }}>{formatHours(p.total_hours ?? 0)} total</p>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); handleExport(p.id); }} className="flex size-7 items-center justify-center rounded-md transition-colors" style={{ color: "var(--tt-text-muted)" }}>
-                      <Download size={14} />
-                    </button>
                     {expandedHistory === p.id ? <ChevronUp size={14} style={{ color: "var(--tt-text-muted)" }} /> : <ChevronDown size={14} style={{ color: "var(--tt-text-muted)" }} />}
                   </div>
                 </button>
+                {expandedHistory === p.id && (
+                  <div className="flex flex-wrap gap-2 px-4 pb-3" style={{ borderTop: "1px solid var(--tt-border-faint)", paddingTop: 12 }}>
+                    <button onClick={() => handleExportCSV(p.id)} disabled={loading === "csv"}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--tt-border-subtle)", color: "var(--tt-text-tertiary)" }}>
+                      {loading === "csv" ? <Loader2 className="size-3 animate-spin" /> : <FileSpreadsheet size={13} />} Download CSV
+                    </button>
+                    <button onClick={() => handlePrintReport(p.id)} disabled={loading === "report"}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--tt-border-subtle)", color: "var(--tt-text-tertiary)" }}>
+                      {loading === "report" ? <Loader2 className="size-3 animate-spin" /> : <FileText size={13} />} Print Report
+                    </button>
+                    <button onClick={() => handlePrintStubs(p.id)} disabled={loading === "stubs"}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--tt-border-subtle)", color: "var(--tt-text-tertiary)" }}>
+                      {loading === "stubs" ? <Loader2 className="size-3 animate-spin" /> : <Receipt size={13} />} Pay Stubs
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
