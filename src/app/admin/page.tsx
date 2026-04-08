@@ -37,6 +37,7 @@ export default async function AdminDashboardPage() {
     deptResult,
     upcomingResult,
     offSiteResult,
+    jobSitesResult,
   ] = await Promise.all([
     supabase
       .from("organizations")
@@ -114,6 +115,7 @@ export default async function AdminDashboardPage() {
       .order("start_time")
       .limit(6),
     supabase.from("time_entries").select("id").eq("organization_id", orgId).eq("clock_in_on_site", false).gte("clock_in", todayStart.toISOString()),
+    supabase.from("job_sites").select("*").eq("organization_id", orgId).eq("is_active", true).gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }),
   ]);
 
   const org = orgResult.data;
@@ -238,6 +240,8 @@ export default async function AdminDashboardPage() {
       weekData={weekData}
       upcomingSchedules={upcomingSchedules}
       offSiteToday={(offSiteResult.data ?? []).length}
+      jobSites={(jobSitesResult.data ?? []) as any}
+      organizationId={orgId}
     />
   );
 }

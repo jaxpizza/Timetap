@@ -16,9 +16,17 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 async function checkOnSite(admin: any, orgId: string, lat: number | null, lon: number | null): Promise<boolean | null> {
   if (lat == null || lon == null) return null;
+
+  // Check permanent work locations
   const { data: locations } = await admin.from("locations").select("latitude, longitude, radius_meters").eq("organization_id", orgId).eq("is_active", true);
-  if (!locations || locations.length === 0) return null;
-  for (const loc of locations) {
+
+  // Check active job sites
+  const { data: jobSites } = await admin.from("job_sites").select("latitude, longitude, radius_meters").eq("organization_id", orgId).eq("is_active", true).gt("expires_at", new Date().toISOString());
+
+  const allSites = [...(locations ?? []), ...(jobSites ?? [])];
+  if (allSites.length === 0) return null;
+
+  for (const loc of allSites) {
     if (loc.latitude == null || loc.longitude == null) continue;
     const dist = haversineDistance(lat, lon, Number(loc.latitude), Number(loc.longitude));
     if (dist <= (loc.radius_meters ?? 402)) return true;

@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { forceClockOut } from "./timesheets/actions";
+import { extendJobSite, closeJobSite } from "./job-sites/actions";
+import { AddJobSiteSheet } from "@/components/add-job-site-sheet";
 import { format, addDays, differenceInDays } from "date-fns";
 import { useTheme } from "@/components/theme-provider";
 import { formatHours, getInitials } from "@/lib/utils";
@@ -57,6 +59,16 @@ interface UpcomingShift {
   name: string;
 }
 
+interface JobSite {
+  id: string;
+  name: string;
+  address: string | null;
+  expires_at: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+}
+
 interface Props {
   greeting: string;
   firstName: string;
@@ -73,6 +85,8 @@ interface Props {
   weekData: WeekDay[];
   upcomingSchedules?: UpcomingShift[];
   offSiteToday?: number;
+  jobSites?: JobSite[];
+  organizationId?: string;
 }
 
 /* ── helpers ── */
@@ -203,6 +217,7 @@ export function AdminDashboardClient({
   greeting, firstName, orgName,
   totalEmployees, activeNow, todayHours, todayLaborCost,
   pendingTimesheets, pendingPto, pendingEdits, nextPayPeriod, recentActivity, weekData, upcomingSchedules = [], offSiteToday = 0,
+  jobSites = [], organizationId = "",
 }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -210,18 +225,14 @@ export function AdminDashboardClient({
   const today = format(new Date(), "EEEE, MMMM d, yyyy");
   const displayName = capitalize(firstName) || "there";
   const greetingText = `${greeting}, ${displayName}`;
+  const [addJobSiteOpen, setAddJobSiteOpen] = useState(false);
 
-  const weekStart = format(addDays(new Date(), -6), "MMM d");
-  const weekEnd = format(new Date(), "MMM d");
   const pendingTotal = pendingTimesheets + pendingPto + pendingEdits;
 
   const payPeriodLabel = nextPayPeriod
     ? `in ${differenceInDays(new Date(nextPayPeriod.endDate), new Date())} days`
     : "—";
   const payPeriodSub = nextPayPeriod ? format(new Date(nextPayPeriod.endDate), "MMM d") : "not configured";
-
-  const weekTotal = weekData.reduce((s, d) => s + d.hours, 0);
-  const maxWeekHours = Math.max(...weekData.map((d) => d.hours), 1);
 
   // Auto-refresh every 30s
   useEffect(() => {
@@ -443,60 +454,47 @@ export function AdminDashboardClient({
           </motion.div>
         </motion.div>
 
-        {/* Bottom Row */}
-        <motion.div variants={section(0.7)} initial="hidden" animate="show" className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {/* This Week */}
+        {/* Job Sites */}
+        <motion.div variants={section(0.7)} initial="hidden" animate="show">
           <motion.div variants={rise} className="overflow-hidden rounded-xl" style={cardStyle}>
             <div className="flex items-center justify-between px-4 py-3 sm:px-5" style={{ borderBottom: "1px solid var(--tt-border-faint)" }}>
-              <h2 className="text-sm font-semibold tracking-wide" style={{ color: "var(--tt-text-secondary)" }}>This Week</h2>
-              <span className="font-mono text-xs" style={{ color: "var(--tt-text-muted)" }}>{weekStart} – {weekEnd}</span>
-            </div>
-            <div className="px-4 py-5 sm:px-6">
-              <div className="flex items-end justify-between gap-1" style={{ height: 120 }}>
-                {weekData.map((d, i) => (
-                  <div key={i} className="flex flex-1 flex-col items-center gap-2">
-                    <div className="flex w-full flex-1 items-end justify-center">
-                      <div className="w-full max-w-[28px] rounded-t-sm transition-all duration-500"
-                        style={{
-                          height: d.hours > 0 ? `${Math.max(8, (d.hours / maxWeekHours) * 100)}%` : 4,
-                          background: d.hours > 0 ? "linear-gradient(to top, #6366F1, #818CF8)" : "var(--tt-skeleton)",
-                        }} />
-                    </div>
-                    <span className="text-[10px]" style={{ color: "var(--tt-text-muted)" }}>{d.day.charAt(0)}</span>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-teal-400" />
+                <h2 className="text-sm font-semibold tracking-wide" style={{ color: "var(--tt-text-secondary)" }}>Active Job Sites</h2>
+                {jobSites.length > 0 && (
+                  <span className="flex size-5 items-center justify-center rounded-full bg-teal-500/15 text-[10px] font-bold text-teal-400">{jobSites.length}</span>
+                )}
               </div>
-              <p className="mt-3 text-center text-sm" style={{ color: "var(--tt-text-tertiary)" }}>{formatHours(weekTotal)} total</p>
+              <button
+                onClick={() => setAddJobSiteOpen(true)}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-teal-400 transition-colors hover:bg-teal-500/10"
+                style={{ border: "1px solid rgba(20,184,166,0.2)" }}
+              >
+                <MapPin size={12} /> Add Site
+              </button>
             </div>
-          </motion.div>
 
-          {/* Upcoming */}
-          <motion.div variants={rise} className="overflow-hidden rounded-xl" style={cardStyle}>
-            <div className="flex items-center justify-between px-4 py-3 sm:px-5" style={{ borderBottom: "1px solid var(--tt-border-faint)" }}>
-              <h2 className="text-sm font-semibold tracking-wide" style={{ color: "var(--tt-text-secondary)" }}>Upcoming</h2>
-              <Calendar size={14} style={{ color: "var(--tt-text-muted)" }} />
-            </div>
-            <div>
-              {upcomingSchedules.length > 0 ? (
-                upcomingSchedules.map((s, i) => (
-                  <div key={s.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < upcomingSchedules.length - 1 ? "1px solid var(--tt-border-faint)" : undefined }}>
-                    <div className="flex size-10 flex-col items-center justify-center rounded-lg" style={{ backgroundColor: "var(--tt-elevated-bg)" }}>
-                      <span className="text-[9px] uppercase" style={{ color: "var(--tt-text-muted)" }}>{format(new Date(s.startTime), "MMM")}</span>
-                      <span className="text-sm font-semibold" style={{ color: "var(--tt-text-tertiary)" }}>{format(new Date(s.startTime), "d")}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm" style={{ color: "var(--tt-text-primary)" }}>{s.name}</p>
-                      <p className="font-mono text-xs" style={{ color: "var(--tt-text-muted)" }}>{format(new Date(s.startTime), "h:mm a")} – {format(new Date(s.endTime), "h:mm a")}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="px-4 py-8 text-center text-xs" style={{ color: "var(--tt-text-muted)" }}>No upcoming shifts scheduled</p>
-              )}
-            </div>
+            {jobSites.length === 0 ? (
+              <div className="flex flex-col items-center py-8">
+                <MapPin size={24} strokeWidth={1.5} style={{ color: "var(--tt-text-muted)" }} />
+                <p className="mt-3 text-sm" style={{ color: "var(--tt-text-muted)" }}>No active job sites</p>
+                <p className="mt-1 text-xs" style={{ color: "var(--tt-text-faint)" }}>Add one to track on-site clock-ins for temporary locations</p>
+              </div>
+            ) : (
+              <div>
+                {jobSites.slice(0, 5).map((site, i) => (
+                  <JobSiteRow key={site.id} site={site} isLast={i === Math.min(jobSites.length, 5) - 1} onRefresh={() => router.refresh()} />
+                ))}
+                {jobSites.length > 5 && (
+                  <p className="py-2 text-center text-xs text-indigo-400">+ {jobSites.length - 5} more</p>
+                )}
+              </div>
+            )}
           </motion.div>
         </motion.div>
       </div>
+
+      <AddJobSiteSheet open={addJobSiteOpen} onOpenChange={setAddJobSiteOpen} organizationId={organizationId} />
 
       <style>{`
         @keyframes icon-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
@@ -505,5 +503,62 @@ export function AdminDashboardClient({
         @keyframes avatar-pulse { 0%, 100% { opacity: var(--_o, 1); } 50% { opacity: calc(var(--_o, 1) * 0.6); } }
       `}</style>
     </motion.div>
+  );
+}
+
+function JobSiteRow({ site, isLast, onRefresh }: { site: JobSite; isLast: boolean; onRefresh: () => void }) {
+  const [extending, setExtending] = useState(false);
+  const [showExtend, setShowExtend] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  const expiresIn = Math.max(0, Math.ceil((new Date(site.expires_at).getTime() - Date.now()) / 86400000));
+  const isExpiringSoon = expiresIn <= 1;
+
+  async function handleExtend(days: number) {
+    setExtending(true);
+    const r = await extendJobSite(site.id, days);
+    setExtending(false);
+    setShowExtend(false);
+    if (r.success) { toast.success(`Extended by ${days} day${days > 1 ? "s" : ""}`); onRefresh(); }
+    else toast.error(r.error || "Failed");
+  }
+
+  async function handleClose() {
+    setClosing(true);
+    const r = await closeJobSite(site.id);
+    setClosing(false);
+    if (r.success) { toast.success("Job site closed"); onRefresh(); }
+    else toast.error(r.error || "Failed");
+  }
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: isLast ? undefined : "1px solid var(--tt-border-faint)" }}>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium" style={{ color: "var(--tt-text-primary)" }}>{site.name}</p>
+        <p className="truncate text-xs" style={{ color: "var(--tt-text-muted)" }}>
+          {site.address ? `${site.address} · ` : ""}
+          <span style={{ color: isExpiringSoon ? "#FBBF24" : "var(--tt-text-muted)" }}>
+            {expiresIn === 0 ? "Expires today" : `Expires in ${expiresIn} day${expiresIn > 1 ? "s" : ""}`}
+          </span>
+        </p>
+      </div>
+      <div className="relative flex items-center gap-1 pl-2">
+        <button onClick={() => setShowExtend(!showExtend)} disabled={extending} className="rounded-md px-2 py-1 text-[11px] font-medium text-teal-400 transition-colors hover:bg-teal-500/10">
+          {extending ? "..." : "Extend"}
+        </button>
+        <button onClick={handleClose} disabled={closing} className="rounded-md px-1.5 py-1 text-[11px] text-rose-400 transition-colors hover:bg-rose-500/10">
+          {closing ? "..." : "Close"}
+        </button>
+        {showExtend && (
+          <div className="absolute right-0 top-full z-50 mt-1 rounded-lg p-1 shadow-xl" style={{ backgroundColor: "var(--tt-dropdown-bg)", border: "1px solid var(--tt-border)" }}>
+            {[1, 3, 5, 7].map((d) => (
+              <button key={d} onClick={() => handleExtend(d)} className="block w-full whitespace-nowrap rounded px-3 py-1.5 text-left text-xs transition-colors hover:bg-teal-500/10" style={{ color: "var(--tt-text-secondary)" }}>
+                +{d} day{d > 1 ? "s" : ""}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

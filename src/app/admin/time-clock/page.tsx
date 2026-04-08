@@ -14,7 +14,7 @@ export default async function TimeClockPage() {
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   weekStart.setHours(0, 0, 0, 0);
 
-  const [{ data: activeEntries }, { data: payRates }, { data: locations }, { data: recentClockIns }] = await Promise.all([
+  const [{ data: activeEntries }, { data: payRates }, { data: locations }, { data: recentClockIns }, { data: jobSites }] = await Promise.all([
     supabase.from("time_entries")
       .select("id, profile_id, clock_in, total_break_minutes, clock_in_on_site, clock_in_latitude, clock_in_longitude, profiles!time_entries_profile_id_fkey(first_name, last_name, department_id, departments(name))")
       .eq("organization_id", orgId).eq("status", "active").is("clock_out", null).order("clock_in"),
@@ -25,6 +25,8 @@ export default async function TimeClockPage() {
       .eq("organization_id", orgId).gte("clock_in", weekStart.toISOString())
       .not("clock_in_latitude", "is", null)
       .order("clock_in", { ascending: false }).limit(50),
+    supabase.from("job_sites").select("id, name, latitude, longitude, radius_meters, expires_at")
+      .eq("organization_id", orgId).eq("is_active", true).gt("expires_at", new Date().toISOString()),
   ]);
 
   return (
@@ -33,6 +35,7 @@ export default async function TimeClockPage() {
       payRates={payRates ?? []}
       locations={locations ?? []}
       recentClockIns={(recentClockIns ?? []) as any}
+      jobSites={(jobSites ?? []) as any}
     />
   );
 }

@@ -19,6 +19,7 @@ interface ClockIn {
   id: string; profile_id: string; clock_in: string; clock_in_latitude: number | null; clock_in_longitude: number | null; clock_in_on_site: boolean | null;
   profiles: { first_name: string | null; last_name: string | null } | null;
 }
+interface JobSite { id: string; name: string; latitude: number; longitude: number; radius_meters: number; expires_at: string }
 
 function capitalize(s?: string | null) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
 
@@ -31,8 +32,8 @@ function useElapsedAll(entries: ActiveEntry[]) {
   return entries.map((e) => Math.max(0, (Date.now() - new Date(e.clock_in).getTime()) / 1000));
 }
 
-export function TimeClockClient({ activeEntries, payRates, locations, recentClockIns }: {
-  activeEntries: ActiveEntry[]; payRates: PayRate[]; locations: Location[]; recentClockIns: ClockIn[];
+export function TimeClockClient({ activeEntries, payRates, locations, recentClockIns, jobSites = [] }: {
+  activeEntries: ActiveEntry[]; payRates: PayRate[]; locations: Location[]; recentClockIns: ClockIn[]; jobSites?: JobSite[];
 }) {
   const router = useRouter();
   const elapsed = useElapsedAll(activeEntries);
@@ -43,7 +44,9 @@ export function TimeClockClient({ activeEntries, payRates, locations, recentCloc
   const rateMap = new Map<string, number>();
   for (const pr of payRates) rateMap.set(pr.profile_id, pr.type === "salary" ? Number(pr.rate) / 2080 : Number(pr.rate));
 
-  const workLocations = locations.filter((l) => l.latitude && l.longitude).map((l) => ({ lat: Number(l.latitude), lng: Number(l.longitude), name: l.name, radiusMeters: Number(l.radius_meters ?? 402) }));
+  const permanentLocations = locations.filter((l) => l.latitude && l.longitude).map((l) => ({ lat: Number(l.latitude), lng: Number(l.longitude), name: l.name, radiusMeters: Number(l.radius_meters ?? 402) }));
+  const jobSiteLocations = jobSites.map((s) => ({ lat: Number(s.latitude), lng: Number(s.longitude), name: `${s.name} (Job Site)`, radiusMeters: Number(s.radius_meters ?? 91) }));
+  const workLocations = [...permanentLocations, ...jobSiteLocations];
   const clockPoints = recentClockIns.filter((c) => c.clock_in_latitude && c.clock_in_longitude).map((c) => ({
     lat: Number(c.clock_in_latitude), lng: Number(c.clock_in_longitude), onSite: c.clock_in_on_site,
     label: `${capitalize(c.profiles?.first_name)} ${capitalize(c.profiles?.last_name)} — ${format(new Date(c.clock_in), "MMM d, h:mm a")}`,
