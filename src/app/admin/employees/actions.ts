@@ -121,6 +121,20 @@ export async function updateEmployee(
 ): Promise<{ success: boolean; error?: string }> {
   const admin = createAdminClient();
 
+  // Protect the owner role
+  const { data: target } = await admin.from("profiles").select("role").eq("id", profileId).single();
+  if (target?.role === "owner") {
+    // Owner can edit their own profile fields but NOT their role
+    const supabase = await createReadOnlyClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id !== profileId) return { success: false, error: "Cannot modify the owner account" };
+    if (input.role !== "owner") return { success: false, error: "Owner role cannot be changed. Contact platform support." };
+  }
+  // Prevent non-super-admin from setting anyone to owner
+  if (input.role === "owner" && target?.role !== "owner") {
+    return { success: false, error: "Owner role can only be set by platform support" };
+  }
+
   const { error: profileError } = await admin
     .from("profiles")
     .update({
@@ -168,10 +182,9 @@ export async function deactivateEmployee(
   profileId: string
 ): Promise<{ success: boolean; error?: string }> {
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ is_active: false })
-    .eq("id", profileId);
+  const { data: target } = await admin.from("profiles").select("role").eq("id", profileId).single();
+  if (target?.role === "owner") return { success: false, error: "Cannot deactivate the owner account" };
+  const { error } = await admin.from("profiles").update({ is_active: false }).eq("id", profileId);
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
@@ -180,10 +193,7 @@ export async function reactivateEmployee(
   profileId: string
 ): Promise<{ success: boolean; error?: string }> {
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ is_active: true })
-    .eq("id", profileId);
+  const { error } = await admin.from("profiles").update({ is_active: true }).eq("id", profileId);
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
@@ -192,6 +202,8 @@ export async function deleteEmployee(
   profileId: string
 ): Promise<{ success: boolean; error?: string }> {
   const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles").select("role").eq("id", profileId).single();
+  if (target?.role === "owner") return { success: false, error: "Cannot delete the owner account" };
   const { error } = await admin.auth.admin.deleteUser(profileId);
   if (error) return { success: false, error: error.message };
   return { success: true };

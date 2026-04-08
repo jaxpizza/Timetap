@@ -261,11 +261,17 @@ export function EditEmployeeSheet({
             <SectionLabel>Role & Department</SectionLabel>
             <div className="mt-3 space-y-4">
               <FieldGroup label="Role">
-                <SelectPremium
-                  value={role}
-                  onValueChange={setRole}
-                  options={roleOptions}
-                />
+                {employee.role === "owner" ? (
+                  <p className="rounded-lg px-3 py-2.5 text-sm" style={{ backgroundColor: "var(--tt-elevated-bg)", border: "1px solid var(--tt-border)", color: "var(--tt-text-muted)" }}>
+                    Owner <span className="text-xs">(cannot be changed)</span>
+                  </p>
+                ) : (
+                  <SelectPremium
+                    value={role}
+                    onValueChange={setRole}
+                    options={roleOptions}
+                  />
+                )}
               </FieldGroup>
               <FieldGroup label="Department">
                 {deptOptions.length > 0 ? (

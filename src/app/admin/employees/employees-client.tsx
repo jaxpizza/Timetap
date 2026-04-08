@@ -18,6 +18,7 @@ import {
   Clock,
   Copy,
   Check,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -418,6 +419,7 @@ function EmployeeCard({
             <p className="truncate text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>
               {capitalize(emp.first_name)} {capitalize(emp.last_name)}
             </p>
+            {emp.role === "owner" && <span title="Organization Owner"><Shield size={12} className="shrink-0 text-amber-400" /></span>}
             <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: emp.is_active ? "#34D399" : "var(--tt-text-faint)" }} />
           </div>
           <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium capitalize" style={{ backgroundColor: badge.bg, color: badge.text }}>{emp.role}</span>
@@ -432,7 +434,12 @@ function EmployeeCard({
             <MoreHorizontal size={16} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44 rounded-xl p-1 shadow-xl" style={{ backgroundColor: "var(--tt-dropdown-bg)", borderColor: "var(--tt-border)" }}>
-            {isSelf ? (
+            {emp.role === "owner" && !isSelf ? (
+              /* Non-owners can only view the owner's profile */
+              <DropdownMenuItem onClick={() => window.location.href = `/admin/employees/${emp.id}`} className="gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>
+                <FileText size={14} /> View Profile
+              </DropdownMenuItem>
+            ) : isSelf ? (
               <>
                 <DropdownMenuItem onClick={onEdit} className="gap-2 rounded-lg px-3 py-2 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>
                   <Pencil size={14} /> Edit Profile
