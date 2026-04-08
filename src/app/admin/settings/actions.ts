@@ -10,15 +10,14 @@ async function retroactiveOnSiteCheck(
   longitude: number,
   radiusMeters: number
 ): Promise<number> {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
+  // For permanent locations: check ALL historical clock-ins, not just today.
+  // Only fetch entries that aren't already marked on-site (skip the rest).
   const { data: entries } = await admin
     .from("time_entries")
     .select("id, clock_in_latitude, clock_in_longitude, clock_in_on_site, clock_out_latitude, clock_out_longitude, clock_out_on_site")
     .eq("organization_id", organizationId)
-    .gte("clock_in", startOfToday.toISOString())
-    .not("clock_in_latitude", "is", null);
+    .not("clock_in_latitude", "is", null)
+    .or("clock_in_on_site.is.null,clock_in_on_site.eq.false");
 
   let updated = 0;
   for (const entry of entries ?? []) {
