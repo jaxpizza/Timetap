@@ -2,7 +2,7 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { startOfLocalToday, calculateDistance } from "@/lib/utils";
+import { calculateDistance } from "@/lib/utils";
 
 export async function createJobSite(input: {
   organizationId: string;
@@ -29,20 +29,23 @@ export async function createJobSite(input: {
     radius_meters: input.radiusMeters,
     expires_at: expiresAt,
     created_by: user.id,
-  }).select("id").single();
+  }).select("id, starts_at").single();
 
   if (error) return { success: false, error: error.message };
 
-  // Retroactively update today's clock-ins that are near this job site
+  // Retroactively update clock-ins from the job site's starts_at to now.
+  // starts_at defaults to now(), so this normally checks today.
+  // If an admin backdates starts_at, it catches those past entries too.
   let retroactiveUpdates = 0;
-  const todayStart = startOfLocalToday();
+  const startsAt = data?.starts_at ?? new Date().toISOString();
 
   const { data: entries } = await admin
     .from("time_entries")
     .select("id, clock_in_latitude, clock_in_longitude, clock_in_on_site, clock_out_latitude, clock_out_longitude, clock_out_on_site")
     .eq("organization_id", input.organizationId)
-    .gte("clock_in", todayStart.toISOString())
-    .not("clock_in_latitude", "is", null);
+    .gte("clock_in", startsAt)
+    .not("clock_in_latitude", "is", null)
+    .or("clock_in_on_site.is.null,clock_in_on_site.eq.false");
 
   for (const entry of entries ?? []) {
     let updated = false;

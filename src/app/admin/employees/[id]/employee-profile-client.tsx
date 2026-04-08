@@ -44,6 +44,7 @@ interface Entry {
   clock_out_longitude: number | null;
   clock_out_on_site: boolean | null;
   nearestLocation: NearestLocation | null;
+  activeJobSites: WorkLocation[];
 }
 
 interface PTOBalance {
@@ -299,6 +300,7 @@ function ShiftHistoryCard({ entry, hourlyRate, locations }: { entry: Entry; hour
               <div className="mt-3 overflow-hidden rounded-xl">
                 <DynamicLocationMapView
                   workLocations={locations}
+                  jobSites={entry.activeJobSites}
                   clockPoints={clockPoints}
                   height={220}
                 />

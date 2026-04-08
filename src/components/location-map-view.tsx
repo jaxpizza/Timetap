@@ -32,16 +32,16 @@ const LIGHT_TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 interface WorkLocation { lat: number; lng: number; name: string; radiusMeters: number }
 interface ClockPoint { lat: number; lng: number; onSite: boolean | null; label: string }
 
-export default function LocationMapView({ workLocations = [], clockPoints = [], height = 400, center, zoom }: {
-  workLocations?: WorkLocation[]; clockPoints?: ClockPoint[]; height?: number;
+export default function LocationMapView({ workLocations = [], jobSites = [], clockPoints = [], height = 400, center, zoom }: {
+  workLocations?: WorkLocation[]; jobSites?: WorkLocation[]; clockPoints?: ClockPoint[]; height?: number;
   center?: [number, number]; zoom?: number;
 }) {
   const { theme } = useTheme();
   const tiles = theme === "dark" ? DARK_TILES : LIGHT_TILES;
 
   // Calculate center from data
-  const allLats = [...workLocations.map((l) => l.lat), ...clockPoints.map((p) => p.lat)];
-  const allLngs = [...workLocations.map((l) => l.lng), ...clockPoints.map((p) => p.lng)];
+  const allLats = [...workLocations.map((l) => l.lat), ...jobSites.map((l) => l.lat), ...clockPoints.map((p) => p.lat)];
+  const allLngs = [...workLocations.map((l) => l.lng), ...jobSites.map((l) => l.lng), ...clockPoints.map((p) => p.lng)];
   const defaultCenter: [number, number] = allLats.length > 0
     ? [allLats.reduce((a, b) => a + b, 0) / allLats.length, allLngs.reduce((a, b) => a + b, 0) / allLngs.length]
     : [39.8283, -98.5795];
@@ -49,6 +49,7 @@ export default function LocationMapView({ workLocations = [], clockPoints = [], 
   // Collect all points for auto-fit
   const fitPoints: [number, number][] = [
     ...workLocations.map((l) => [l.lat, l.lng] as [number, number]),
+    ...jobSites.map((l) => [l.lat, l.lng] as [number, number]),
     ...clockPoints.map((p) => [p.lat, p.lng] as [number, number]),
   ];
 
@@ -61,6 +62,12 @@ export default function LocationMapView({ workLocations = [], clockPoints = [], 
           <Circle key={`wl-${i}`} center={[loc.lat, loc.lng]} radius={loc.radiusMeters}
             pathOptions={{ fillColor: "#6366F1", fillOpacity: 0.12, color: "#6366F1", opacity: 0.4, weight: 2 }}>
             <Popup><strong>{loc.name}</strong><br />Geofence: {Math.round(loc.radiusMeters * 3.28084)} ft</Popup>
+          </Circle>
+        ))}
+        {jobSites.map((site, i) => (
+          <Circle key={`js-${i}`} center={[site.lat, site.lng]} radius={site.radiusMeters}
+            pathOptions={{ fillColor: "#14B8A6", fillOpacity: 0.12, color: "#14B8A6", opacity: 0.4, weight: 2, dashArray: "6 4" }}>
+            <Popup><strong>{site.name}</strong><br />Job Site · {Math.round(site.radiusMeters * 3.28084)} ft</Popup>
           </Circle>
         ))}
         {clockPoints.map((pt, i) => (

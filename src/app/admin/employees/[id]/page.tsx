@@ -27,6 +27,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
     { data: ptoBalances },
     { data: schedules },
     { data: locations },
+    { data: jobSites },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -66,40 +67,57 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       .select("id, name, latitude, longitude, radius_meters")
       .eq("organization_id", orgId)
       .eq("is_active", true),
+    supabase
+      .from("job_sites")
+      .select("id, name, latitude, longitude, radius_meters, starts_at, expires_at")
+      .eq("organization_id", orgId),
   ]);
 
   if (!profile) return null;
 
-  // Calculate nearest location for each time entry
+  // Calculate nearest location (permanent + active job sites) for each time entry
   const entriesWithLocation = (timeEntries ?? []).map((entry: any) => {
     let nearestLocation: { name: string; distanceMeters: number; onSite: boolean } | null = null;
 
-    if (entry.clock_in_latitude && entry.clock_in_longitude && locations && locations.length > 0) {
+    if (entry.clock_in_latitude && entry.clock_in_longitude) {
       let minDist = Infinity;
       let minName = "";
       let minRadius = 402;
-      for (const loc of locations) {
+      const clockInTime = new Date(entry.clock_in).getTime();
+
+      // Check permanent locations
+      for (const loc of locations ?? []) {
         if (!loc.latitude || !loc.longitude) continue;
-        const dist = calculateDistance(
-          entry.clock_in_latitude, entry.clock_in_longitude,
-          Number(loc.latitude), Number(loc.longitude)
-        );
-        if (dist < minDist) {
-          minDist = dist;
-          minName = loc.name;
-          minRadius = loc.radius_meters ?? 402;
+        const dist = calculateDistance(entry.clock_in_latitude, entry.clock_in_longitude, Number(loc.latitude), Number(loc.longitude));
+        if (dist < minDist) { minDist = dist; minName = loc.name; minRadius = Number(loc.radius_meters ?? 402); }
+      }
+
+      // Check job sites that were active at the time of this clock-in
+      for (const site of jobSites ?? []) {
+        const startsAt = new Date(site.starts_at).getTime();
+        const expiresAt = new Date(site.expires_at).getTime();
+        if (clockInTime >= startsAt && clockInTime <= expiresAt) {
+          const dist = calculateDistance(entry.clock_in_latitude, entry.clock_in_longitude, Number(site.latitude), Number(site.longitude));
+          if (dist < minDist) { minDist = dist; minName = site.name; minRadius = Number(site.radius_meters ?? 122); }
         }
       }
+
       if (minName) {
-        nearestLocation = {
-          name: minName,
-          distanceMeters: Math.round(minDist),
-          onSite: minDist <= minRadius,
-        };
+        nearestLocation = { name: minName, distanceMeters: Math.round(minDist), onSite: minDist <= minRadius };
       }
     }
 
-    return { ...entry, nearestLocation };
+    // Also pass which job sites were active for this entry (for the map)
+    const clockInTime = new Date(entry.clock_in).getTime();
+    const activeJobSites = (jobSites ?? []).filter((s: any) => {
+      const startsAt = new Date(s.starts_at).getTime();
+      const expiresAt = new Date(s.expires_at).getTime();
+      return clockInTime >= startsAt && clockInTime <= expiresAt;
+    }).map((s: any) => ({
+      lat: Number(s.latitude), lng: Number(s.longitude), name: s.name, radiusMeters: Number(s.radius_meters ?? 122),
+    }));
+
+    return { ...entry, nearestLocation, activeJobSites };
   });
 
   // Compute stats
