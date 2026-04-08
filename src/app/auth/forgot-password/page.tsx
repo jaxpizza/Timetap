@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
       >
         <div className="rounded-card border border-zinc-700/80 bg-card p-8 text-center shadow-xl shadow-black/20 ring-1 ring-white/[0.03]">
           <Mail className="mx-auto size-12 text-timetap-primary-400" />
-          <h2 className="mt-4 font-heading text-xl font-bold text-foreground">
+          <h2 className="mt-4 font-heading text-xl font-bold text-white">
             Check your email
           </h2>
           <p className="mt-2 text-sm text-zinc-400">
