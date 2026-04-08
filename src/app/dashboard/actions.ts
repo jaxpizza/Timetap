@@ -2,35 +2,43 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { startOfLocalWeek, formatHours } from "@/lib/utils";
+import { startOfLocalWeek, formatHours, calculateDistance } from "@/lib/utils";
 import { notifyOrgOwner } from "@/lib/notifications/create";
-
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // meters
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 async function checkOnSite(admin: any, orgId: string, lat: number | null, lon: number | null): Promise<boolean | null> {
   if (lat == null || lon == null) return null;
 
   // Check permanent work locations
-  const { data: locations } = await admin.from("locations").select("latitude, longitude, radius_meters").eq("organization_id", orgId).eq("is_active", true);
+  const { data: locations } = await admin
+    .from("locations")
+    .select("latitude, longitude, radius_meters")
+    .eq("organization_id", orgId)
+    .eq("is_active", true);
+
+  if (locations) {
+    for (const loc of locations) {
+      if (loc.latitude && loc.longitude) {
+        const dist = calculateDistance(lat, lon, Number(loc.latitude), Number(loc.longitude));
+        if (dist <= (Number(loc.radius_meters) || 402)) return true;
+      }
+    }
+  }
 
   // Check active job sites
-  const { data: jobSites } = await admin.from("job_sites").select("latitude, longitude, radius_meters").eq("organization_id", orgId).eq("is_active", true).gt("expires_at", new Date().toISOString());
+  const { data: jobSites } = await admin
+    .from("job_sites")
+    .select("latitude, longitude, radius_meters")
+    .eq("organization_id", orgId)
+    .eq("is_active", true)
+    .gte("expires_at", new Date().toISOString());
 
-  const allSites = [...(locations ?? []), ...(jobSites ?? [])];
-  if (allSites.length === 0) return null;
-
-  for (const loc of allSites) {
-    if (loc.latitude == null || loc.longitude == null) continue;
-    const dist = haversineDistance(lat, lon, Number(loc.latitude), Number(loc.longitude));
-    if (dist <= (loc.radius_meters ?? 402)) return true;
+  if (jobSites) {
+    for (const site of jobSites) {
+      const dist = calculateDistance(lat, lon, Number(site.latitude), Number(site.longitude));
+      if (dist <= (Number(site.radius_meters) || 122)) return true;
+    }
   }
+
   return false;
 }
 

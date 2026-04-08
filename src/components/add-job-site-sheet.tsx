@@ -31,7 +31,7 @@ export function AddJobSiteSheet({ open, onOpenChange, organizationId }: {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [address, setAddress] = useState("");
-  const [radiusFeet, setRadiusFeet] = useState(300);
+  const [radiusFeet, setRadiusFeet] = useState(400);
   const [durationDays, setDurationDays] = useState(7);
   const [loading, setLoading] = useState(false);
 

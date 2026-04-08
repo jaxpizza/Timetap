@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS public.job_sites (
   address text,
   latitude numeric NOT NULL,
   longitude numeric NOT NULL,
-  radius_meters numeric DEFAULT 91.44, -- 300 feet in meters
+  radius_meters numeric DEFAULT 121.92, -- 400 feet in meters
   starts_at timestamptz DEFAULT now(),
   expires_at timestamptz NOT NULL,
   is_active boolean DEFAULT true,

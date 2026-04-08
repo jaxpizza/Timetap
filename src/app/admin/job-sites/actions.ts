@@ -2,16 +2,7 @@
 
 import { createReadOnlyClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { startOfLocalToday } from "@/lib/utils";
-
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+import { startOfLocalToday, calculateDistance } from "@/lib/utils";
 
 export async function createJobSite(input: {
   organizationId: string;
@@ -58,7 +49,7 @@ export async function createJobSite(input: {
     const updates: Record<string, any> = {};
 
     if (entry.clock_in_latitude && entry.clock_in_longitude && !entry.clock_in_on_site) {
-      const dist = haversineDistance(input.latitude, input.longitude, Number(entry.clock_in_latitude), Number(entry.clock_in_longitude));
+      const dist = calculateDistance(input.latitude, input.longitude, Number(entry.clock_in_latitude), Number(entry.clock_in_longitude));
       if (dist <= input.radiusMeters) {
         updates.clock_in_on_site = true;
         updated = true;
@@ -66,7 +57,7 @@ export async function createJobSite(input: {
     }
 
     if (entry.clock_out_latitude && entry.clock_out_longitude && !entry.clock_out_on_site) {
-      const dist = haversineDistance(input.latitude, input.longitude, Number(entry.clock_out_latitude), Number(entry.clock_out_longitude));
+      const dist = calculateDistance(input.latitude, input.longitude, Number(entry.clock_out_latitude), Number(entry.clock_out_longitude));
       if (dist <= input.radiusMeters) {
         updates.clock_out_on_site = true;
         updated = true;
