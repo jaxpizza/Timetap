@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { DollarSign, Lock, Play, Download, ChevronDown, ChevronUp, Loader2, Plus, FileText, FileSpreadsheet, Receipt } from "lucide-react";
 import { toast } from "sonner";
-import { format, addDays, differenceInDays } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { createPayPeriod, lockPayPeriod, calculatePayroll, approvePayroll, exportPayrollCSV, generatePayrollReport, generatePayStubs } from "./actions";
+import { PayrollCalendarPicker } from "@/components/payroll-calendar-picker";
 
 interface PayPeriod {
   id: string; start_date: string; end_date: string; status: string;
@@ -122,22 +121,6 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
     } else toast.error(r.error || "Failed");
   }
 
-  // Auto-calc end date based on pay period type
-  function handleStartChange(v: string) {
-    setStartDate(v);
-    if (!v) return;
-    const d = new Date(v + "T12:00:00");
-    let end: Date;
-    switch (payPeriodType) {
-      case "weekly": end = addDays(d, 6); break;
-      case "biweekly": end = addDays(d, 13); break;
-      case "semimonthly": end = addDays(d, 14); break;
-      case "monthly": end = addDays(d, 29); break;
-      default: end = addDays(d, 13);
-    }
-    setEndDate(format(end, "yyyy-MM-dd"));
-  }
-
   const totals = entries ? {
     regHrs: entries.reduce((s, e) => s + e.regularHours, 0),
     otHrs: entries.reduce((s, e) => s + e.overtimeHours, 0),
@@ -162,26 +145,24 @@ export function PayrollClient({ organizationId, payPeriodType, overtimeThreshold
 
       {/* Create form */}
       {creating && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 rounded-xl p-5"
-          style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
-          <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>Create Pay Period</p>
-          <p className="mt-0.5 text-xs" style={{ color: "var(--tt-text-muted)" }}>Type: {payPeriodType}</p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs" style={{ color: "var(--tt-text-secondary)" }}>Start date</Label>
-              <Input type="date" value={startDate} onChange={(e) => handleStartChange(e.target.value)} />
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>Select Pay Period</p>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--tt-text-muted)" }}>Pay period type: {payPeriodType} &mdash; click a start date, then adjust the end date if needed</p>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs" style={{ color: "var(--tt-text-secondary)" }}>End date</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={handleCreate} disabled={loading === "create"} className="rounded-lg bg-indigo-500 px-4 py-2 text-sm text-white hover:bg-indigo-600">
-              {loading === "create" ? <Loader2 className="size-4 animate-spin" /> : "Create"}
-            </Button>
             <Button variant="ghost" onClick={() => setCreating(false)} className="text-sm" style={{ color: "var(--tt-text-tertiary)" }}>Cancel</Button>
           </div>
+
+          <PayrollCalendarPicker
+            existingPeriods={payPeriods.map((p) => ({ startDate: p.start_date, endDate: p.end_date, status: p.status }))}
+            onSelect={(s, e) => { setStartDate(s); setEndDate(e); }}
+            payPeriodType={payPeriodType}
+          />
+
+          <Button onClick={handleCreate} disabled={loading === "create" || !startDate || !endDate} className="h-11 w-full rounded-xl bg-indigo-500 text-sm font-semibold text-white hover:bg-indigo-600">
+            {loading === "create" ? <Loader2 className="size-4 animate-spin" /> : `Create Pay Period${startDate && endDate ? ` (${startDate} to ${endDate})` : ""}`}
+          </Button>
         </motion.div>
       )}
 
