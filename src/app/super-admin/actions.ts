@@ -71,14 +71,15 @@ export async function getOrganizationDetail(orgId: string) {
   await verifySuperAdmin();
   const admin = createAdminClient();
 
-  const [{ data: org }, { data: employees }, { data: entries }, { data: payPeriods }] = await Promise.all([
+  const [{ data: org }, { data: employees }, { data: entries }, { data: payPeriods }, { data: departments }] = await Promise.all([
     admin.from("organizations").select("*").eq("id", orgId).single(),
     admin.from("profiles").select("*, departments(name), pay_rates(rate, type, is_primary)").eq("organization_id", orgId).order("first_name"),
     admin.from("time_entries").select("id, profile_id, clock_in, clock_out, total_hours, status").eq("organization_id", orgId).order("clock_in", { ascending: false }).limit(50),
     admin.from("pay_periods").select("*").eq("organization_id", orgId).order("start_date", { ascending: false }),
+    admin.from("departments").select("id, name").eq("organization_id", orgId),
   ]);
 
-  return { org, employees: employees ?? [], entries: entries ?? [], payPeriods: payPeriods ?? [] };
+  return { org, employees: employees ?? [], entries: entries ?? [], payPeriods: payPeriods ?? [], departments: departments ?? [] };
 }
 
 export async function superUpdateOrganization(orgId: string, updates: Record<string, any>): Promise<{ success: boolean; error?: string }> {
@@ -94,6 +95,49 @@ export async function superUpdateProfile(profileId: string, updates: Record<stri
   const admin = createAdminClient();
   const { error } = await admin.from("profiles").update(updates).eq("id", profileId);
   if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function superUpdatePayRate(
+  profileId: string,
+  organizationId: string,
+  rate: number,
+  type: string
+): Promise<{ success: boolean; error?: string }> {
+  await verifySuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: existing } = await admin.from("pay_rates").select("id").eq("profile_id", profileId).eq("is_primary", true).maybeSingle();
+  if (existing) {
+    const { error } = await admin.from("pay_rates").update({ rate, type }).eq("id", existing.id);
+    if (error) return { success: false, error: error.message };
+  } else {
+    const { error } = await admin.from("pay_rates").insert({ profile_id: profileId, organization_id: organizationId, rate, type, is_primary: true });
+    if (error) return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+export async function transferOwnership(
+  orgId: string,
+  newOwnerId: string,
+  oldOwnerId: string
+): Promise<{ success: boolean; error?: string }> {
+  await verifySuperAdmin();
+  const admin = createAdminClient();
+
+  // Update new owner
+  const { error: e1 } = await admin.from("profiles").update({ role: "owner" }).eq("id", newOwnerId);
+  if (e1) return { success: false, error: e1.message };
+
+  // Demote old owner to admin
+  const { error: e2 } = await admin.from("profiles").update({ role: "admin" }).eq("id", oldOwnerId);
+  if (e2) return { success: false, error: e2.message };
+
+  // Update org owner_id
+  const { error: e3 } = await admin.from("organizations").update({ owner_id: newOwnerId }).eq("id", orgId);
+  if (e3) return { success: false, error: e3.message };
+
   return { success: true };
 }
 

@@ -6,7 +6,7 @@ import { Users, Search, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { getInitials } from "@/lib/utils";
-import { getAllUsers, superDeleteUser } from "../actions";
+import { getAllUsers, superDeleteUser, superUpdateProfile } from "../actions";
 
 function capitalize(s?: string | null) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
 
@@ -79,6 +79,19 @@ export default function AllUsersPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <select value={u.role} onChange={async (e) => {
+                  const newRole = e.target.value;
+                  setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, role: newRole } : x));
+                  const r = await superUpdateProfile(u.id, { role: newRole });
+                  r.success ? toast.success(`Updated ${capitalize(u.first_name)}'s role to ${newRole}`) : toast.error(r.error || "Failed");
+                }}
+                  className="rounded-md border px-1.5 py-0.5 text-[10px] capitalize"
+                  style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border-faint)", color: "var(--tt-text-tertiary)" }}>
+                  <option value="employee">Employee</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                  <option value="owner">Owner</option>
+                </select>
                 <span className="size-1.5 rounded-full" style={{ backgroundColor: u.is_active ? "#34D399" : "var(--tt-text-faint)" }} />
                 <button onClick={() => handleDelete(u.id)} disabled={deleting === u.id}
                   className="flex size-6 items-center justify-center rounded text-rose-400 hover:bg-rose-500/10">

@@ -4,11 +4,18 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Building2, Users, Clock, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, Building2, Clock, Trash2, Loader2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
-import { getOrganizationDetail, superUpdateOrganization, superDeleteOrganization } from "../../actions";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  getOrganizationDetail, superUpdateOrganization, superUpdateProfile,
+  superUpdatePayRate, transferOwnership, superDeleteOrganization,
+} from "../../actions";
 
 function capitalize(s?: string | null) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
 
@@ -28,10 +35,10 @@ export default function OrgDetailPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [tier, setTier] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [editingEmp, setEditingEmp] = useState<any>(null);
 
-  useEffect(() => {
-    getOrganizationDetail(orgId).then((d) => { setData(d); setTier(d.org?.subscription_tier ?? "free"); });
-  }, [orgId]);
+  function refresh() { getOrganizationDetail(orgId).then((d) => { setData(d); setTier(d.org?.subscription_tier ?? "free"); }); }
+  useEffect(() => { refresh(); }, [orgId]);
 
   async function handleTierChange(newTier: string) {
     setTier(newTier);
@@ -49,7 +56,7 @@ export default function OrgDetailPage() {
   }
 
   if (!data) return <p className="py-12 text-center text-sm" style={{ color: "var(--tt-text-muted)" }}>Loading...</p>;
-  const { org, employees, entries, payPeriods } = data;
+  const { org, employees, entries, payPeriods, departments } = data;
 
   const tabs = [
     { key: "employees" as const, label: "Employees", count: employees.length },
@@ -72,7 +79,7 @@ export default function OrgDetailPage() {
         </div>
       </div>
 
-      {/* Org Settings */}
+      {/* Settings cards */}
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
           <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--tt-text-muted)" }}>Subscription Tier</p>
@@ -128,14 +135,13 @@ export default function OrgDetailPage() {
                       <div className="mt-0.5 flex items-center gap-2">
                         <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize" style={{ backgroundColor: badge.bg, color: badge.text }}>{emp.role}</span>
                         <span className="text-[10px]" style={{ color: "var(--tt-text-muted)" }}>{emp.email}</span>
-                        {emp.departments?.name && <span className="text-[10px]" style={{ color: "var(--tt-text-faint)" }}>{emp.departments.name}</span>}
+                        {rate && <span className="font-mono text-[10px]" style={{ color: "var(--tt-text-faint)" }}>${Number(rate.rate).toFixed(2)}/{rate.type === "hourly" ? "hr" : "yr"}</span>}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    {rate && <p className="font-mono text-xs" style={{ color: "var(--tt-text-tertiary)" }}>${Number(rate.rate).toFixed(2)}{rate.type === "hourly" ? "/hr" : "/yr"}</p>}
-                    <span className="size-1.5 inline-block rounded-full" style={{ backgroundColor: emp.is_active ? "#34D399" : "var(--tt-text-faint)" }} />
-                  </div>
+                  <button onClick={() => setEditingEmp(emp)} className="flex size-7 items-center justify-center rounded-md transition-colors hover:bg-indigo-500/10" style={{ color: "var(--tt-text-muted)" }}>
+                    <Pencil size={13} />
+                  </button>
                 </div>
               );
             })}
@@ -189,6 +195,193 @@ export default function OrgDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Edit Employee Sheet */}
+      {editingEmp && (
+        <EditEmployeeSheet
+          employee={editingEmp}
+          orgId={orgId}
+          orgName={org?.name ?? ""}
+          currentOwnerId={org?.owner_id ?? ""}
+          departments={departments ?? []}
+          onClose={() => setEditingEmp(null)}
+          onSave={() => { setEditingEmp(null); refresh(); }}
+        />
+      )}
     </motion.div>
+  );
+}
+
+/* ── Edit Employee Sheet ── */
+
+function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departments, onClose, onSave }: {
+  employee: any; orgId: string; orgName: string; currentOwnerId: string;
+  departments: { id: string; name: string }[];
+  onClose: () => void; onSave: () => void;
+}) {
+  const [firstName, setFirstName] = useState(employee.first_name ?? "");
+  const [lastName, setLastName] = useState(employee.last_name ?? "");
+  const [phone, setPhone] = useState(employee.phone ?? "");
+  const [role, setRole] = useState(employee.role ?? "employee");
+  const [deptId, setDeptId] = useState(employee.department_id ?? "");
+  const [payType, setPayType] = useState(employee.pay_rates?.find((r: any) => r.is_primary)?.type ?? "hourly");
+  const [payRate, setPayRate] = useState(String(employee.pay_rates?.find((r: any) => r.is_primary)?.rate ?? "0"));
+  const [filingStatus, setFilingStatus] = useState(employee.filing_status ?? "single");
+  const [fedAllowances, setFedAllowances] = useState(String(employee.federal_allowances ?? 0));
+  const [stateAllowances, setStateAllowances] = useState(String(employee.state_allowances ?? 0));
+  const [isActive, setIsActive] = useState(employee.is_active ?? true);
+  const [joinStatus, setJoinStatus] = useState(employee.join_status ?? "active");
+  const [hireDate, setHireDate] = useState(employee.hire_date ?? "");
+  const [loading, setLoading] = useState(false);
+  const [showOwnerWarning, setShowOwnerWarning] = useState(false);
+
+  const isChangingToOwner = role === "owner" && employee.role !== "owner";
+
+  async function handleSave() {
+    if (isChangingToOwner && !showOwnerWarning) {
+      setShowOwnerWarning(true);
+      return;
+    }
+
+    setLoading(true);
+
+    // Update profile
+    const r = await superUpdateProfile(employee.id, {
+      first_name: firstName, last_name: lastName, phone: phone || null,
+      role: isChangingToOwner ? "owner" : role,
+      department_id: deptId || null,
+      filing_status: filingStatus,
+      federal_allowances: Number(fedAllowances),
+      state_allowances: Number(stateAllowances),
+      is_active: isActive,
+      join_status: joinStatus,
+      hire_date: hireDate || null,
+    });
+
+    // Update pay rate
+    if (Number(payRate) > 0) {
+      await superUpdatePayRate(employee.id, orgId, Number(payRate), payType);
+    }
+
+    // Transfer ownership if needed
+    if (isChangingToOwner) {
+      await transferOwnership(orgId, employee.id, currentOwnerId);
+    }
+
+    setLoading(false);
+    if (r.success) { toast.success("Employee updated"); onSave(); }
+    else toast.error(r.error || "Failed");
+  }
+
+  return (
+    <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-[440px]" style={{ backgroundColor: "var(--tt-card-bg)", borderColor: "var(--tt-border)" }}>
+        <SheetHeader className="border-b px-6 py-4" style={{ borderColor: "var(--tt-border-subtle)" }}>
+          <SheetTitle className="font-heading text-lg font-bold" style={{ color: "var(--tt-text-primary)" }}>
+            Edit {capitalize(employee.first_name)} {capitalize(employee.last_name)}
+          </SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4 px-6 py-5">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="First name"><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} /></Field>
+            <Field label="Last name"><Input value={lastName} onChange={(e) => setLastName(e.target.value)} /></Field>
+          </div>
+          <Field label="Email (read-only)"><p className="text-sm" style={{ color: "var(--tt-text-muted)" }}>{employee.email}</p></Field>
+          <Field label="Phone"><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
+
+          <Field label="Role">
+            <select value={role} onChange={(e) => { setRole(e.target.value); setShowOwnerWarning(false); }}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm"
+              style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
+              <option value="employee">Employee</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+              <option value="owner">Owner</option>
+            </select>
+          </Field>
+
+          {showOwnerWarning && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-400">Ownership Transfer</p>
+              <p className="mt-1 text-xs text-amber-300">
+                This will make {capitalize(firstName)} the owner of {orgName}. The current owner will be demoted to admin.
+              </p>
+            </div>
+          )}
+
+          <Field label="Department">
+            <select value={deptId} onChange={(e) => setDeptId(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm"
+              style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
+              <option value="">None</option>
+              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Pay type">
+              <select value={payType} onChange={(e) => setPayType(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2.5 text-sm"
+                style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
+                <option value="hourly">Hourly</option>
+                <option value="salary">Salary</option>
+              </select>
+            </Field>
+            <Field label="Pay rate"><Input type="number" step="0.01" value={payRate} onChange={(e) => setPayRate(e.target.value)} /></Field>
+          </div>
+
+          <Field label="Filing status">
+            <select value={filingStatus} onChange={(e) => setFilingStatus(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm"
+              style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
+              <option value="single">Single</option>
+              <option value="married_joint">Married Filing Jointly</option>
+              <option value="married_separate">Married Filing Separately</option>
+              <option value="head_of_household">Head of Household</option>
+            </select>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Federal allowances"><Input type="number" value={fedAllowances} onChange={(e) => setFedAllowances(e.target.value)} /></Field>
+            <Field label="State allowances"><Input type="number" value={stateAllowances} onChange={(e) => setStateAllowances(e.target.value)} /></Field>
+          </div>
+
+          <Field label="Hire date"><Input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} /></Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Status">
+              <select value={isActive ? "active" : "inactive"} onChange={(e) => setIsActive(e.target.value === "active")}
+                className="w-full rounded-lg border px-3 py-2.5 text-sm"
+                style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </Field>
+            <Field label="Join status">
+              <select value={joinStatus} onChange={(e) => setJoinStatus(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2.5 text-sm"
+                style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </Field>
+          </div>
+
+          <Button onClick={handleSave} disabled={loading} className="h-11 w-full rounded-xl bg-indigo-500 text-sm font-semibold text-white hover:bg-indigo-600">
+            {loading ? <Loader2 className="size-4 animate-spin" /> : showOwnerWarning && isChangingToOwner ? "Confirm Transfer & Save" : "Save Changes"}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium" style={{ color: "var(--tt-text-secondary)" }}>{label}</Label>
+      {children}
+    </div>
   );
 }
