@@ -245,10 +245,15 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
 
     setLoading(true);
 
-    // Update profile
-    const r = await superUpdateProfile(employee.id, {
+    // When transferring ownership, do that FIRST, then update other fields WITHOUT the role
+    if (isChangingToOwner) {
+      const tr = await transferOwnership(orgId, employee.id, currentOwnerId);
+      if (!tr.success) { setLoading(false); toast.error(tr.error || "Transfer failed"); return; }
+    }
+
+    // Update profile fields — exclude role when transferring ownership (transferOwnership already set it)
+    const profileUpdates: Record<string, any> = {
       first_name: firstName, last_name: lastName, phone: phone || null,
-      role: isChangingToOwner ? "owner" : role,
       department_id: deptId || null,
       filing_status: filingStatus,
       federal_allowances: Number(fedAllowances),
@@ -256,20 +261,19 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
       is_active: isActive,
       join_status: joinStatus,
       hire_date: hireDate || null,
-    });
+    };
+    if (!isChangingToOwner) {
+      profileUpdates.role = role;
+    }
+    const r = await superUpdateProfile(employee.id, profileUpdates);
 
     // Update pay rate
     if (Number(payRate) > 0) {
       await superUpdatePayRate(employee.id, orgId, Number(payRate), payType);
     }
 
-    // Transfer ownership if needed
-    if (isChangingToOwner) {
-      await transferOwnership(orgId, employee.id, currentOwnerId);
-    }
-
     setLoading(false);
-    if (r.success) { toast.success("Employee updated"); onSave(); }
+    if (r.success) { toast.success(isChangingToOwner ? "Ownership transferred" : "Employee updated"); onSave(); }
     else toast.error(r.error || "Failed");
   }
 
