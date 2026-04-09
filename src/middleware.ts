@@ -9,12 +9,14 @@ export async function middleware(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   if (code && !request.nextUrl.pathname.startsWith("/auth/callback")) {
     const callbackUrl = new URL("/auth/callback", request.url);
-    callbackUrl.searchParams.set("code", code);
-    const next = request.nextUrl.searchParams.get("next");
-    if (next) callbackUrl.searchParams.set("next", next);
-    // Check if this might be a recovery flow (type param from Supabase)
-    const type = request.nextUrl.searchParams.get("type");
-    if (type === "recovery") callbackUrl.searchParams.set("next", "/auth/reset-password");
+    // Forward all query params (code, type, next, etc.)
+    request.nextUrl.searchParams.forEach((value, key) => {
+      callbackUrl.searchParams.set(key, value);
+    });
+    // If Supabase sent type=recovery but no next param, add it
+    if (request.nextUrl.searchParams.get("type") === "recovery" && !request.nextUrl.searchParams.get("next")) {
+      callbackUrl.searchParams.set("next", "/auth/reset-password");
+    }
     return NextResponse.redirect(callbackUrl);
   }
 

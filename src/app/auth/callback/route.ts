@@ -6,20 +6,33 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-
   const next = searchParams.get("next");
 
   const supabase = await createClient();
 
   if (code) {
-    // PKCE flow — exchange code for session
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      return NextResponse.redirect(`${origin}/auth/login?error=callback_failed`);
+    }
   } else if (token_hash && type) {
-    // Magic link / email confirmation / password recovery flow
-    await supabase.auth.verifyOtp({ token_hash, type: type as any });
+    const { error } = await supabase.auth.verifyOtp({ token_hash, type: type as any });
+    if (error) {
+      return NextResponse.redirect(`${origin}/auth/login?error=callback_failed`);
+    }
   }
 
-  // Redirect to the specified next page, or default to login with confirmed message
-  const redirectUrl = next ? `${origin}${next}` : `${origin}/auth/login?confirmed=true`;
-  return NextResponse.redirect(redirectUrl);
+  // Determine where to redirect
+  // 1. Explicit next param (e.g., /auth/reset-password)
+  if (next) {
+    return NextResponse.redirect(`${origin}${next}`);
+  }
+
+  // 2. Recovery flow detected via type param
+  if (type === "recovery") {
+    return NextResponse.redirect(`${origin}/auth/reset-password`);
+  }
+
+  // 3. Default: signup confirmation
+  return NextResponse.redirect(`${origin}/auth/login?confirmed=true`);
 }

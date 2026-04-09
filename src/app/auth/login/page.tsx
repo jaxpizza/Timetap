@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const confirmed = searchParams.get("confirmed") === "true";
+  const passwordReset = searchParams.get("reset") === "true";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -105,6 +106,12 @@ export default function LoginPage() {
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
           <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
           <p className="text-sm text-emerald-400">Email confirmed! You can now sign in.</p>
+        </div>
+      )}
+      {passwordReset && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+          <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+          <p className="text-sm text-emerald-400">Password updated! Sign in with your new password.</p>
         </div>
       )}
 

@@ -132,8 +132,9 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    toast.success("Password set successfully!");
-    window.location.href = "/";
+    toast.success("Password updated! Sign in with your new password.");
+    await supabase.auth.signOut();
+    window.location.href = "/auth/login?reset=true";
   }
 
   return (
