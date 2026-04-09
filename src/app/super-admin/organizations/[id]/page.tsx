@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Building2, Clock, Trash2, Loader2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Building2, Clock, Trash2, Loader2, Pencil, X, Copy, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   getOrganizationDetail, superUpdateOrganization, superUpdateProfile,
-  superUpdatePayRate, transferOwnership, superDeleteOrganization,
+  superUpdatePayRate, transferOwnership, superDeleteOrganization, regenerateOrgInviteCode,
 } from "../../actions";
 
 function capitalize(s?: string | null) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
@@ -36,8 +36,10 @@ export default function OrgDetailPage() {
   const [tier, setTier] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [editingEmp, setEditingEmp] = useState<any>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [copied, setCopied] = useState(false);
 
-  function refresh() { getOrganizationDetail(orgId).then((d) => { setData(d); setTier(d.org?.subscription_tier ?? "free"); }); }
+  function refresh() { getOrganizationDetail(orgId).then((d) => { setData(d); setTier(d.org?.subscription_tier ?? "free"); setInviteCode(d.org?.invite_code ?? ""); }); }
   useEffect(() => { refresh(); }, [orgId]);
 
   async function handleTierChange(newTier: string) {
@@ -79,8 +81,29 @@ export default function OrgDetailPage() {
         </div>
       </div>
 
+      {/* Invite Code */}
+      <div className="mt-5 rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+        <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--tt-text-muted)" }}>Invite Code</p>
+        <div className="mt-2 flex items-center gap-3">
+          <p className="font-mono text-lg font-semibold tracking-[0.15em]" style={{ color: "var(--tt-text-primary)" }}>{inviteCode || org?.invite_code}</p>
+          <button onClick={() => { navigator.clipboard.writeText(inviteCode || org?.invite_code || ""); setCopied(true); toast.success("Copied!"); setTimeout(() => setCopied(false), 2000); }}
+            className="flex size-7 items-center justify-center rounded-md transition-colors" style={{ color: copied ? "#34D399" : "var(--tt-text-muted)" }}>
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+          <button onClick={async () => {
+            setLoading("regen");
+            const r = await regenerateOrgInviteCode(orgId);
+            setLoading(null);
+            if (r.success && r.code) { setInviteCode(r.code); toast.success("Code regenerated"); }
+            else toast.error(r.error || "Failed");
+          }} disabled={loading === "regen"} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+            {loading === "regen" ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw size={12} />} Regenerate
+          </button>
+        </div>
+      </div>
+
       {/* Settings cards */}
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
           <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--tt-text-muted)" }}>Subscription Tier</p>
           <select value={tier} onChange={(e) => handleTierChange(e.target.value)}
@@ -244,17 +267,14 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
     }
 
     setLoading(true);
-    console.log("Save handler:", { isChangingToOwner, role, employeeRole: employee.role, currentOwnerId });
 
     // When transferring ownership, ONLY call transferOwnership — it handles the role
     if (isChangingToOwner) {
-      console.log("Calling transferOwnership:", { orgId, newOwnerId: employee.id, oldOwnerId: currentOwnerId });
       const tr = await transferOwnership(orgId, employee.id, currentOwnerId);
-      console.log("Transfer result:", tr);
       if (!tr.success) { setLoading(false); toast.error(tr.error || "Transfer failed"); return; }
     }
 
-    // Update non-role profile fields (NEVER include role here — transferOwnership already handled it if needed)
+    // Update non-role profile fields
     const profileUpdates: Record<string, any> = {
       first_name: firstName, last_name: lastName, phone: phone || null,
       department_id: deptId || null,
@@ -265,17 +285,10 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
       join_status: joinStatus,
       hire_date: hireDate || null,
     };
-    // Only set role if NOT an ownership transfer
     if (!isChangingToOwner) {
       profileUpdates.role = role;
     }
-    // Safety: absolutely ensure role is not in the update if transferring
-    if (isChangingToOwner && "role" in profileUpdates) {
-      delete profileUpdates.role;
-    }
-    console.log("Calling superUpdateProfile with:", Object.keys(profileUpdates), "role in updates?", "role" in profileUpdates);
     const r = await superUpdateProfile(employee.id, profileUpdates);
-    console.log("Profile update result:", r);
 
     // Update pay rate
     if (Number(payRate) > 0) {

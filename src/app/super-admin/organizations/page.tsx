@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Building2, Users, ChevronRight } from "lucide-react";
+import { Building2, Users, ChevronRight, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { getAllOrganizations } from "../actions";
 
@@ -49,8 +50,12 @@ export default function OrganizationsPage() {
                       <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--tt-text-muted)" }}>
                         <Users size={10} /> {org.employeeCount} employees
                       </span>
+                      <span className="font-mono text-[10px] tracking-wide" style={{ color: "var(--tt-text-tertiary)" }}
+                        onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(org.inviteCode); toast.success("Code copied"); }}>
+                        {org.inviteCode}
+                      </span>
                       <span className="text-[10px]" style={{ color: "var(--tt-text-faint)" }}>
-                        Created {format(new Date(org.createdAt), "MMM d, yyyy")}
+                        {format(new Date(org.createdAt), "MMM d, yyyy")}
                       </span>
                     </div>
                   </div>

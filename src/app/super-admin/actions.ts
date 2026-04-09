@@ -126,33 +126,39 @@ export async function transferOwnership(
   await verifySuperAdmin();
   const admin = createAdminClient();
 
-  console.log("=== TRANSFER OWNERSHIP START ===", { orgId, newOwnerId, oldOwnerId });
+  // Step 1: Set new owner
+  const { error: e1 } = await admin.from("profiles").update({ role: "owner" }).eq("id", newOwnerId);
+  if (e1) return { success: false, error: e1.message };
 
-  // Step 1: Update new owner
-  const r1 = await admin.from("profiles").update({ role: "owner" }).eq("id", newOwnerId);
-  console.log("Step 1 - Set new owner role:", r1.error?.message || "SUCCESS");
-  if (r1.error) return { success: false, error: r1.error.message };
-
-  // Step 2: Demote old owner to admin (skip if same person)
+  // Step 2: Demote old owner (skip if same person)
   if (oldOwnerId && oldOwnerId !== newOwnerId) {
-    const r2 = await admin.from("profiles").update({ role: "admin" }).eq("id", oldOwnerId);
-    console.log("Step 2 - Demote old owner:", r2.error?.message || "SUCCESS");
-    if (r2.error) return { success: false, error: r2.error.message };
-  } else {
-    console.log("Step 2 - Skipped (same person or no old owner)");
+    const { error: e2 } = await admin.from("profiles").update({ role: "admin" }).eq("id", oldOwnerId);
+    if (e2) return { success: false, error: e2.message };
   }
 
   // Step 3: Update org owner_id
-  const r3 = await admin.from("organizations").update({ owner_id: newOwnerId }).eq("id", orgId);
-  console.log("Step 3 - Update org owner_id:", r3.error?.message || "SUCCESS");
-  if (r3.error) return { success: false, error: r3.error.message };
-
-  // Verify
-  const { data: verify } = await admin.from("profiles").select("role").eq("id", newOwnerId).single();
-  console.log("Verification - new owner role is now:", verify?.role);
-  console.log("=== TRANSFER OWNERSHIP END ===");
+  const { error: e3 } = await admin.from("organizations").update({ owner_id: newOwnerId }).eq("id", orgId);
+  if (e3) return { success: false, error: e3.message };
 
   return { success: true };
+}
+
+export async function regenerateOrgInviteCode(
+  orgId: string
+): Promise<{ success: boolean; code?: string; error?: string }> {
+  await verifySuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: org } = await admin.from("organizations").select("name").eq("id", orgId).single();
+  const prefix = (org?.name ?? "XXXX").replace(/[^a-zA-Z0-9]/g, "").substring(0, 4).toUpperCase().padEnd(4, "X");
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+  const code = `${prefix}-${suffix}`;
+
+  const { error } = await admin.from("organizations").update({ invite_code: code }).eq("id", orgId);
+  if (error) return { success: false, error: error.message };
+  return { success: true, code };
 }
 
 export async function superDeleteOrganization(orgId: string): Promise<{ success: boolean; error?: string }> {
