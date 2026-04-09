@@ -4,18 +4,15 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Palmtree, ChevronLeft, ChevronRight } from "lucide-react";
-import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, eachDayOfInterval, isSameMonth, isToday, isBefore, startOfDay } from "date-fns";
-import { formatHours, parseLocalDate } from "@/lib/utils";
+import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, eachDayOfInterval, isSameMonth, isToday } from "date-fns";
+import { parseLocalDate } from "@/lib/utils";
 import { getEmployeeSchedules, getEmployeePTO } from "./actions";
 import { ShiftDetailSheet, type SelectedItem } from "./shift-detail-sheet";
 
 interface Shift { id: string; start_time: string; end_time: string; department_id: string | null; notes: string | null; departments: { name: string; color: string } | null }
 interface PTOReq { id: string; pto_policy_id: string; start_date: string; end_date: string; total_hours: number; status: string; pto_policies: { name: string; color: string } | null }
 
-type View = "list" | "week" | "month";
-
-const rise = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, damping: 25, stiffness: 120 } } };
-const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.1 } } };
+type View = "week" | "month";
 
 function buildPTOMap(reqs: PTOReq[]) {
   const m = new Map<string, { name: string; color: string; req: PTOReq }>();
@@ -32,7 +29,7 @@ export function ScheduleClient({ schedules: initial, ptoRequests: initialPTO, we
   schedules: Shift[]; ptoRequests: PTOReq[]; weekStartIso: string;
 }) {
   const router = useRouter();
-  const [view, setView] = useState<View>("list");
+  const [view, setView] = useState<View>("week");
   const [schedules, setSchedules] = useState(initial);
   const [ptoReqs, setPtoReqs] = useState(initialPTO);
   const [weekStart, setWeekStart] = useState(new Date(weekStartIso));
@@ -45,10 +42,7 @@ export function ScheduleClient({ schedules: initial, ptoRequests: initialPTO, we
     setDetailOpen(true);
   }
 
-  const nextWeekStart = addDays(weekStart, 7);
   const ptoDays = useMemo(() => buildPTOMap(ptoReqs), [ptoReqs]);
-  const thisWeek = schedules.filter((s) => new Date(s.start_time) < nextWeekStart);
-  const nextWeek = schedules.filter((s) => new Date(s.start_time) >= nextWeekStart);
   const days7 = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   async function loadRange(start: Date, end: Date) {
@@ -84,16 +78,16 @@ export function ScheduleClient({ schedules: initial, ptoRequests: initialPTO, we
         <div>
           <h1 className="font-heading text-xl font-bold" style={{ color: "var(--tt-text-primary)" }}>My Schedule</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>
-            {view === "month" ? format(monthDate, "MMMM yyyy") : `${format(weekStart, "MMM d")} – ${format(addDays(weekStart, 13), "MMM d, yyyy")}`}
+            {view === "month" ? format(monthDate, "MMMM yyyy") : `${format(weekStart, "MMM d")} – ${format(addDays(weekStart, 6), "MMM d, yyyy")}`}
           </p>
         </div>
         {/* View toggle */}
         <div className="flex rounded-lg p-0.5" style={{ backgroundColor: "var(--tt-elevated-bg)" }}>
-          {(["list", "week", "month"] as View[]).map((v) => (
+          {(["week", "month"] as View[]).map((v) => (
             <button key={v} onClick={async () => {
               setView(v);
               if (v === "month") await navMonth(0);
-              else if (v !== "list") await navWeek(0);
+              else await navWeek(0);
             }}
               className={`rounded-md px-2.5 py-1 text-[11px] font-medium capitalize transition-all ${view === v ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : ""}`}
               style={view !== v ? { color: "var(--tt-text-muted)", border: "1px solid transparent" } : {}}>
@@ -104,20 +98,6 @@ export function ScheduleClient({ schedules: initial, ptoRequests: initialPTO, we
       </div>
 
       <AnimatePresence mode="wait">
-        {/* LIST VIEW */}
-        {view === "list" && (
-          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            {schedules.length === 0 && ptoReqs.length === 0 ? (
-              <EmptyState />
-            ) : (
-              <>
-                <ShiftList label="This Week" shifts={thisWeek} ptoDays={ptoDays} weekStart={weekStart} onOpenDetail={openDetail} />
-                <ShiftList label="Next Week" shifts={nextWeek} ptoDays={ptoDays} weekStart={nextWeekStart} onOpenDetail={openDetail} />
-              </>
-            )}
-          </motion.div>
-        )}
-
         {/* WEEK VIEW */}
         {view === "week" && (
           <motion.div key="week" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -225,57 +205,6 @@ function NavRow({ label, onPrev, onNext }: { label: string; onPrev: () => void; 
       <button onClick={onPrev} className="flex size-8 items-center justify-center rounded-lg" style={{ color: "var(--tt-text-tertiary)" }}><ChevronLeft size={18} /></button>
       <p className="min-w-[160px] text-center text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>{label}</p>
       <button onClick={onNext} className="flex size-8 items-center justify-center rounded-lg" style={{ color: "var(--tt-text-tertiary)" }}><ChevronRight size={18} /></button>
-    </div>
-  );
-}
-
-function ShiftList({ label, shifts, ptoDays, weekStart, onOpenDetail }: { label: string; shifts: Shift[]; ptoDays: Map<string, { name: string; color: string; req: PTOReq }>; weekStart: Date; onOpenDetail: (item: SelectedItem) => void }) {
-  const weekPTO: { date: Date; name: string; color: string; req: PTOReq }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(weekStart, i);
-    const pto = ptoDays.get(format(d, "yyyy-MM-dd"));
-    if (pto) weekPTO.push({ date: d, ...pto });
-  }
-  if (shifts.length === 0 && weekPTO.length === 0) return null;
-  return (
-    <div className="mt-6">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: "var(--tt-text-muted)" }}>{label}</p>
-      <motion.div variants={container} initial="hidden" animate="show" className="mt-3 space-y-2">
-        {weekPTO.map((pto) => (
-          <motion.div key={`pto-${format(pto.date, "yyyy-MM-dd")}`} variants={rise} onClick={() => onOpenDetail({ kind: "pto", date: pto.date, ptoName: pto.name, ptoColor: pto.color, req: pto.req })} role="button" tabIndex={0}
-            className="flex cursor-pointer items-center gap-4 rounded-xl p-4 transition-colors hover:brightness-110"
-            style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)", borderLeftWidth: 3, borderLeftColor: pto.color }}>
-            <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>{format(pto.date, "EEE, MMM d")}</p>
-            <div className="flex items-center gap-2"><Palmtree size={14} style={{ color: pto.color }} /><span className="text-sm" style={{ color: pto.color }}>{pto.name}</span></div>
-          </motion.div>
-        ))}
-        {shifts.map((shift) => {
-          const start = new Date(shift.start_time);
-          const end = new Date(shift.end_time);
-          const hours = (end.getTime() - start.getTime()) / 3600000;
-          const today = isToday(start);
-          const past = isBefore(startOfDay(start), startOfDay(new Date()));
-          return (
-            <motion.div key={shift.id} variants={rise} onClick={() => onOpenDetail({ kind: "shift", shift, date: start })} role="button" tabIndex={0}
-              className={`flex cursor-pointer items-center justify-between rounded-xl p-4 transition-colors hover:brightness-110 ${past ? "opacity-50" : ""}`}
-              style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)", borderLeftWidth: 3, borderLeftColor: shift.departments?.color ?? "#818CF8" }}>
-              <div className="flex items-center gap-4">
-                <div className="w-24 sm:w-28">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>{format(start, "EEE, MMM d")}</p>
-                    {today && <span className="rounded-full bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-bold text-indigo-400">Today</span>}
-                  </div>
-                  {shift.departments?.name && <p className="mt-0.5 text-xs" style={{ color: "var(--tt-text-tertiary)" }}>{shift.departments.name}</p>}
-                </div>
-                <div>
-                  <p className="font-mono text-sm" style={{ color: "var(--tt-text-primary)" }}>{format(start, "h:mm a")} – {format(end, "h:mm a")}</p>
-                  <p className="mt-0.5 text-xs" style={{ color: "var(--tt-text-muted)" }}>{formatHours(hours)}</p>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </motion.div>
     </div>
   );
 }
