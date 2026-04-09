@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, MapPin, Coffee, Square, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { Clock, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { DynamicLocationMapView as LocationMapView } from "@/components/dynamic-map";
-import { clockIn, clockOut, startBreak, endBreak } from "@/app/dashboard/actions";
 
 interface ActiveEntry {
   id: string; profile_id: string; clock_in: string; total_break_minutes: number;
@@ -34,12 +32,8 @@ function useElapsedAll(entries: ActiveEntry[]) {
   return entries.map((e) => Math.max(0, (Date.now() - new Date(e.clock_in).getTime()) / 1000));
 }
 
-interface MyEntry { id: string; clock_in: string; total_break_minutes: number }
-interface MyBreak { id: string; start_time: string }
-
-export function TimeClockClient({ activeEntries, payRates, locations, recentClockIns, jobSites = [], myEntry: initialEntry, myBreak: initialBreak, myHourlyRate = 0 }: {
+export function TimeClockClient({ activeEntries, payRates, locations, recentClockIns, jobSites = [] }: {
   activeEntries: ActiveEntry[]; payRates: PayRate[]; locations: Location[]; recentClockIns: ClockIn[]; jobSites?: JobSite[];
-  myEntry?: MyEntry | null; myBreak?: MyBreak | null; myHourlyRate?: number;
 }) {
   const router = useRouter();
   const elapsed = useElapsedAll(activeEntries);
@@ -72,9 +66,6 @@ export function TimeClockClient({ activeEntries, payRates, locations, recentCloc
           <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400">{activeEntries.length} active</span>
         )}
       </div>
-
-      {/* Personal Clock */}
-      <PersonalClock initialEntry={initialEntry ?? null} initialBreak={initialBreak ?? null} hourlyRate={myHourlyRate} onRefresh={() => router.refresh()} />
 
       {/* Tabs */}
       <div className="mt-5 flex gap-1 rounded-lg p-0.5" style={{ backgroundColor: "var(--tt-elevated-bg)" }}>
@@ -165,138 +156,5 @@ export function TimeClockClient({ activeEntries, payRates, locations, recentCloc
         </div>
       )}
     </motion.div>
-  );
-}
-
-/* ── Personal Clock ── */
-
-function PersonalClock({ initialEntry, initialBreak, hourlyRate, onRefresh }: {
-  initialEntry: MyEntry | null; initialBreak: MyBreak | null; hourlyRate: number; onRefresh: () => void;
-}) {
-  const [entry, setEntry] = useState(initialEntry);
-  const [onBreak, setOnBreak] = useState(initialBreak);
-  const [loading, setLoading] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [breakElapsed, setBreakElapsed] = useState(0);
-  const raf = useRef<number>(0);
-
-  useEffect(() => {
-    if (!entry) { setElapsed(0); return; }
-    const start = new Date(entry.clock_in).getTime();
-    function tick() { setElapsed(Math.max(0, (Date.now() - start) / 1000)); raf.current = requestAnimationFrame(tick); }
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
-  }, [entry]);
-
-  useEffect(() => {
-    if (!onBreak) { setBreakElapsed(0); return; }
-    const start = new Date(onBreak.start_time).getTime();
-    const id = setInterval(() => setBreakElapsed(Math.max(0, (Date.now() - start) / 1000)), 1000);
-    return () => clearInterval(id);
-  }, [onBreak]);
-
-  const netSec = Math.max(0, elapsed - (entry?.total_break_minutes ?? 0) * 60 - (onBreak ? breakElapsed : 0));
-  const h = Math.floor(netSec / 3600);
-  const m = Math.floor((netSec % 3600) / 60);
-  const s = Math.floor(netSec % 60);
-  const earnings = hourlyRate ? (netSec / 3600) * hourlyRate : 0;
-
-  function getGeo(): Promise<{ latitude: number | null; longitude: number | null; accuracy: number | null }> {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve({ latitude: null, longitude: null, accuracy: null });
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-        () => resolve({ latitude: null, longitude: null, accuracy: null }),
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
-    });
-  }
-
-  async function handleClockIn() {
-    setLoading(true);
-    const geo = await getGeo();
-    const r = await clockIn(geo);
-    setLoading(false);
-    if (r.success) {
-      setEntry({ id: r.timeEntryId!, clock_in: new Date().toISOString(), total_break_minutes: 0 });
-      toast.success(r.onSite === false ? "Clocked in (off-site)" : "Clocked in!");
-      onRefresh();
-    } else toast.error(r.error || "Failed");
-  }
-
-  async function handleClockOut() {
-    if (!entry) return;
-    setLoading(true);
-    const geo = await getGeo();
-    const r = await clockOut(entry.id, geo);
-    setLoading(false);
-    if (r.success) {
-      toast.success(`Clocked out — ${formatHours(r.totalHours ?? netSec / 3600)}`);
-      setEntry(null); setOnBreak(null);
-      onRefresh();
-    } else toast.error(r.error || "Failed");
-  }
-
-  async function handleBreakToggle() {
-    if (!entry) return;
-    if (onBreak) {
-      const r = await endBreak(onBreak.id);
-      if (r.success) {
-        setEntry((prev) => prev ? { ...prev, total_break_minutes: prev.total_break_minutes + Math.round(breakElapsed / 60) } : prev);
-        setOnBreak(null); toast.success("Break ended");
-      }
-    } else {
-      const r = await startBreak(entry.id);
-      if (r.success) { setOnBreak({ id: r.breakId!, start_time: new Date().toISOString() }); toast.success("Break started"); }
-    }
-  }
-
-  return (
-    <div className="mt-4 rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg" style={{ backgroundColor: entry ? "rgba(52,211,153,0.1)" : "var(--tt-elevated-bg)" }}>
-            <Clock size={16} style={{ color: entry ? "#34D399" : "var(--tt-text-muted)" }} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>Your Time Clock</p>
-            {entry ? (
-              <div className="flex items-center gap-3">
-                <p className="font-mono text-lg font-bold" style={{ color: "var(--tt-text-primary)" }}>
-                  {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
-                </p>
-                {hourlyRate > 0 && <span className="font-mono text-xs text-emerald-400">${earnings.toFixed(2)}</span>}
-                {onBreak && <span className="text-xs text-amber-400">On break</span>}
-              </div>
-            ) : (
-              <p className="text-xs" style={{ color: "var(--tt-text-muted)" }}>Not clocked in</p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {entry && (
-            <>
-              <button onClick={handleBreakToggle} disabled={loading}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
-                style={{ backgroundColor: onBreak ? "#F59E0B" : "rgba(245,158,11,0.1)", color: onBreak ? "#fff" : "#FBBF24", border: onBreak ? "none" : "1px solid rgba(245,158,11,0.3)" }}>
-                <Coffee size={13} /> {onBreak ? "End Break" : "Break"}
-              </button>
-              <button onClick={handleClockOut} disabled={loading}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500 px-3 py-2 text-xs font-medium text-white hover:bg-rose-600">
-                {loading ? <Loader2 className="size-3 animate-spin" /> : <Square size={13} fill="currentColor" />} Clock Out
-              </button>
-            </>
-          )}
-          {!entry && (
-            <button onClick={handleClockIn} disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all hover:shadow-[0_0_15px_rgba(52,211,153,0.3)]"
-              style={{ background: "linear-gradient(135deg, #34D399, #14B8A6)" }}>
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Clock size={15} />} Clock In
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
   );
 }

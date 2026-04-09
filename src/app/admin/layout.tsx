@@ -63,7 +63,10 @@ interface NavSection { label: string; items: NavItem[] }
 const navSections: NavSection[] = [
   {
     label: "MAIN",
-    items: [{ label: "Dashboard", icon: LayoutDashboard, href: "/admin" }],
+    items: [
+      { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
+      { label: "Clock In", icon: Clock, href: "/admin/clock-in" },
+    ],
   },
   {
     label: "MANAGEMENT",
