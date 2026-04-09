@@ -5,6 +5,19 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function middleware(request: NextRequest) {
   const response = await updateSession(request);
 
+  // Intercept auth callback codes that land on any URL (Supabase redirects to Site URL with ?code=)
+  const code = request.nextUrl.searchParams.get("code");
+  if (code && !request.nextUrl.pathname.startsWith("/auth/callback")) {
+    const callbackUrl = new URL("/auth/callback", request.url);
+    callbackUrl.searchParams.set("code", code);
+    const next = request.nextUrl.searchParams.get("next");
+    if (next) callbackUrl.searchParams.set("next", next);
+    // Check if this might be a recovery flow (type param from Supabase)
+    const type = request.nextUrl.searchParams.get("type");
+    if (type === "recovery") callbackUrl.searchParams.set("next", "/auth/reset-password");
+    return NextResponse.redirect(callbackUrl);
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
