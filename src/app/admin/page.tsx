@@ -38,6 +38,8 @@ export default async function AdminDashboardPage() {
     upcomingResult,
     offSiteResult,
     jobSitesResult,
+    myEntryResult,
+    myBreakResult,
   ] = await Promise.all([
     supabase
       .from("organizations")
@@ -116,6 +118,8 @@ export default async function AdminDashboardPage() {
       .limit(6),
     supabase.from("time_entries").select("id").eq("organization_id", orgId).eq("clock_in_on_site", false).gte("clock_in", todayStart.toISOString()),
     supabase.from("job_sites").select("*").eq("organization_id", orgId).eq("is_active", true).gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }),
+    supabase.from("time_entries").select("id, clock_in, total_break_minutes").eq("profile_id", user.id).eq("status", "active").is("clock_out", null).maybeSingle(),
+    supabase.from("breaks").select("id, start_time").eq("profile_id", user.id).is("end_time", null).order("start_time", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const org = orgResult.data;
@@ -243,6 +247,9 @@ export default async function AdminDashboardPage() {
       jobSites={(jobSitesResult.data ?? []) as any}
       organizationId={orgId}
       jobSitesEnabled={org?.job_sites_enabled ?? false}
+      myClockEntry={myEntryResult.data ? { id: myEntryResult.data.id, clock_in: myEntryResult.data.clock_in, total_break_minutes: myEntryResult.data.total_break_minutes ?? 0 } : null}
+      myClockBreak={myBreakResult.data ? { id: myBreakResult.data.id, start_time: myBreakResult.data.start_time } : null}
+      myHourlyRate={(() => { const r = (ratesResult.data ?? []).find((pr: any) => pr.profile_id === user.id); return r ? (r.type === "salary" ? Number(r.rate) / 2080 : Number(r.rate)) : 0; })()}
     />
   );
 }

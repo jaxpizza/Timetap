@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { forceClockOut } from "./timesheets/actions";
 import { extendJobSite, closeJobSite } from "./job-sites/actions";
 import { AddJobSiteSheet } from "@/components/add-job-site-sheet";
+import { clockIn, clockOut, startBreak, endBreak } from "@/app/dashboard/actions";
 import { format, addDays, differenceInDays } from "date-fns";
 import { useTheme } from "@/components/theme-provider";
 import { formatHours, getInitials } from "@/lib/utils";
@@ -88,6 +89,9 @@ interface Props {
   jobSites?: JobSite[];
   organizationId?: string;
   jobSitesEnabled?: boolean;
+  myClockEntry?: { id: string; clock_in: string; total_break_minutes: number } | null;
+  myClockBreak?: { id: string; start_time: string } | null;
+  myHourlyRate?: number;
 }
 
 /* ── helpers ── */
@@ -219,6 +223,7 @@ export function AdminDashboardClient({
   totalEmployees, activeNow, todayHours, todayLaborCost,
   pendingTimesheets, pendingPto, pendingEdits, nextPayPeriod, recentActivity, weekData, upcomingSchedules = [], offSiteToday = 0,
   jobSites = [], organizationId = "", jobSitesEnabled = false,
+  myClockEntry = null, myClockBreak = null, myHourlyRate = 0,
 }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -357,6 +362,9 @@ export function AdminDashboardClient({
             );
           })}
         </motion.div>
+
+        {/* Your Clock */}
+        <CompactClock entry={myClockEntry} activeBreak={myClockBreak} hourlyRate={myHourlyRate} onRefresh={() => router.refresh()} />
 
         {/* Who's Working */}
         <motion.div variants={section(0.3)} initial="hidden" animate="show">
@@ -515,6 +523,134 @@ export function AdminDashboardClient({
         @keyframes line-shimmer { 0% { transform: translateX(-50%); } 100% { transform: translateX(0%); } }
         @keyframes avatar-pulse { 0%, 100% { opacity: var(--_o, 1); } 50% { opacity: calc(var(--_o, 1) * 0.6); } }
       `}</style>
+    </motion.div>
+  );
+}
+
+function CompactClock({ entry: initialEntry, activeBreak: initialBreak, hourlyRate, onRefresh }: {
+  entry: { id: string; clock_in: string; total_break_minutes: number } | null;
+  activeBreak: { id: string; start_time: string } | null;
+  hourlyRate: number; onRefresh: () => void;
+}) {
+  const [entry, setEntry] = useState(initialEntry);
+  const [onBreak, setOnBreak] = useState(initialBreak);
+  const [loading, setLoading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [breakElapsed, setBreakElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!entry) { setElapsed(0); return; }
+    const start = new Date(entry.clock_in).getTime();
+    let raf = 0;
+    function tick() { setElapsed(Math.max(0, (Date.now() - start) / 1000)); raf = requestAnimationFrame(tick); }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [entry]);
+
+  useEffect(() => {
+    if (!onBreak) { setBreakElapsed(0); return; }
+    const start = new Date(onBreak.start_time).getTime();
+    const id = setInterval(() => setBreakElapsed(Math.max(0, (Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [onBreak]);
+
+  const netSec = Math.max(0, elapsed - (entry?.total_break_minutes ?? 0) * 60 - (onBreak ? breakElapsed : 0));
+  const h = String(Math.floor(netSec / 3600)).padStart(2, "0");
+  const m = String(Math.floor((netSec % 3600) / 60)).padStart(2, "0");
+  const s = String(Math.floor(netSec % 60)).padStart(2, "0");
+  const earnings = hourlyRate ? (netSec / 3600) * hourlyRate : 0;
+
+  function getGeo(): Promise<{ latitude: number | null; longitude: number | null; accuracy: number | null }> {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve({ latitude: null, longitude: null, accuracy: null });
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        () => resolve({ latitude: null, longitude: null, accuracy: null }),
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    });
+  }
+
+  async function handleClockIn() {
+    setLoading(true);
+    const geo = await getGeo();
+    const r = await clockIn(geo);
+    setLoading(false);
+    if (r.success) {
+      setEntry({ id: r.timeEntryId!, clock_in: new Date().toISOString(), total_break_minutes: 0 });
+      toast.success(r.onSite === false ? "Clocked in (off-site)" : "Clocked in!");
+      onRefresh();
+    } else toast.error(r.error || "Failed");
+  }
+
+  async function handleClockOut() {
+    if (!entry) return;
+    setLoading(true);
+    const geo = await getGeo();
+    const r = await clockOut(entry.id, geo);
+    setLoading(false);
+    if (r.success) {
+      toast.success(`Clocked out — ${formatHours(r.totalHours ?? netSec / 3600)}`);
+      setEntry(null); setOnBreak(null); onRefresh();
+    } else toast.error(r.error || "Failed");
+  }
+
+  async function handleBreak() {
+    if (!entry) return;
+    if (onBreak) {
+      const r = await endBreak(onBreak.id);
+      if (r.success) {
+        setEntry((prev) => prev ? { ...prev, total_break_minutes: prev.total_break_minutes + Math.round(breakElapsed / 60) } : prev);
+        setOnBreak(null); toast.success("Break ended");
+      }
+    } else {
+      const r = await startBreak(entry.id);
+      if (r.success) { setOnBreak({ id: r.breakId!, start_time: new Date().toISOString() }); toast.success("Break started"); }
+    }
+  }
+
+  return (
+    <motion.div variants={rise} initial="hidden" animate="show"
+      className="rounded-xl p-4" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          {entry ? (
+            <>
+              <span className="relative flex size-2.5"><span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex size-2.5 rounded-full bg-emerald-400" /></span>
+              <span className="text-sm font-medium" style={{ color: "var(--tt-text-secondary)" }}>Clocked in</span>
+              <span className="font-mono text-lg font-bold" style={{ color: "var(--tt-text-primary)" }}>{h}:{m}:{s}</span>
+              {hourlyRate > 0 && <span className="font-mono text-xs text-emerald-400">${earnings.toFixed(2)}</span>}
+              {onBreak && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">On break</span>}
+            </>
+          ) : (
+            <>
+              <Clock size={16} style={{ color: "var(--tt-text-muted)" }} />
+              <span className="text-sm" style={{ color: "var(--tt-text-tertiary)" }}>You&apos;re not clocked in</span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {entry ? (
+            <>
+              <button onClick={handleBreak} disabled={loading}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{ backgroundColor: onBreak ? "#F59E0B" : "rgba(245,158,11,0.1)", color: onBreak ? "#fff" : "#FBBF24", border: onBreak ? "none" : "1px solid rgba(245,158,11,0.3)" }}>
+                {onBreak ? "End Break" : "Break"}
+              </button>
+              <button onClick={handleClockOut} disabled={loading}
+                className="rounded-lg bg-rose-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-600">
+                Clock Out
+              </button>
+            </>
+          ) : (
+            <button onClick={handleClockIn} disabled={loading}
+              className="rounded-lg px-6 py-2 text-sm font-semibold text-white transition-all hover:shadow-[0_0_15px_rgba(52,211,153,0.3)]"
+              style={{ background: "linear-gradient(135deg, #34D399, #14B8A6)" }}>
+              {loading ? "..." : "Clock In"}
+            </button>
+          )}
+        </div>
+      </div>
     </motion.div>
   );
 }
