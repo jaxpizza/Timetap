@@ -68,20 +68,20 @@ const navSections: NavSection[] = [
   {
     label: "MANAGEMENT",
     items: [
-      { label: "Employees", icon: Users, href: "/admin/employees" },
-      { label: "Time Clock", icon: Clock, href: "/admin/time-clock" },
-      { label: "Timesheets", icon: FileText, href: "/admin/timesheets" },
+      { label: "Employees", icon: Users, href: "/admin/employees", roles: ["owner", "admin", "payroll", "manager"] },
+      { label: "Time Clock", icon: Clock, href: "/admin/time-clock", roles: ["owner", "admin", "payroll", "manager"] },
+      { label: "Timesheets", icon: FileText, href: "/admin/timesheets", roles: ["owner", "admin", "payroll", "manager"] },
     ],
   },
   {
     label: "FINANCE",
-    items: [{ label: "Payroll", icon: DollarSign, href: "/admin/payroll", roles: ["owner", "admin"] }],
+    items: [{ label: "Payroll", icon: DollarSign, href: "/admin/payroll", roles: ["owner", "admin", "payroll"] }],
   },
   {
     label: "PLANNING",
     items: [
-      { label: "Schedule", icon: Calendar, href: "/admin/schedule" },
-      { label: "PTO", icon: Palmtree, href: "/admin/pto" },
+      { label: "Schedule", icon: Calendar, href: "/admin/schedule", roles: ["owner", "admin", "manager"] },
+      { label: "PTO", icon: Palmtree, href: "/admin/pto", roles: ["owner", "admin", "manager"] },
     ],
   },
   {

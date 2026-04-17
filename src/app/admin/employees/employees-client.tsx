@@ -95,6 +95,7 @@ const cardItem = {
 const roleBadge: Record<string, { bg: string; text: string }> = {
   owner: { bg: "rgba(129,140,248,0.1)", text: "#818CF8" },
   admin: { bg: "rgba(167,139,250,0.1)", text: "#A78BFA" },
+  payroll: { bg: "rgba(245,158,11,0.1)", text: "#F59E0B" },
   manager: { bg: "rgba(251,191,36,0.1)", text: "#FBBF24" },
   employee: { bg: "rgba(52,211,153,0.1)", text: "#34D399" },
 };

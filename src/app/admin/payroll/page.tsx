@@ -8,7 +8,7 @@ export default async function PayrollPage() {
 
   const { data: profile } = await supabase.from("profiles").select("organization_id, role").eq("id", user.id).single();
   if (!profile?.organization_id) return null;
-  if (profile.role !== "owner" && profile.role !== "admin") {
+  if (profile.role !== "owner" && profile.role !== "admin" && profile.role !== "payroll") {
     const { redirect } = await import("next/navigation");
     redirect("/admin");
   }

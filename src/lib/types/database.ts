@@ -4,7 +4,7 @@
 
 // ---------- Enums / Union Types ----------
 
-export type UserRole = "owner" | "admin" | "manager" | "employee";
+export type UserRole = "owner" | "admin" | "payroll" | "manager" | "employee";
 export type PayPeriodType = "weekly" | "biweekly" | "semimonthly" | "monthly";
 export type SubscriptionTier = "free" | "pro" | "enterprise";
 export type PayRateType = "hourly" | "salary";

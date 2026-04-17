@@ -22,6 +22,7 @@ function capitalize(s?: string | null) { return s ? s.charAt(0).toUpperCase() + 
 const roleBadge: Record<string, { bg: string; text: string }> = {
   owner: { bg: "rgba(251,191,36,0.15)", text: "#FBBF24" },
   admin: { bg: "rgba(129,140,248,0.15)", text: "#818CF8" },
+  payroll: { bg: "rgba(245,158,11,0.15)", text: "#F59E0B" },
   manager: { bg: "rgba(52,211,153,0.15)", text: "#34D399" },
   employee: { bg: "rgba(113,113,122,0.15)", text: "#A1A1AA" },
 };
@@ -383,6 +384,7 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
               style={{ backgroundColor: "var(--tt-elevated-bg)", borderColor: "var(--tt-border)", color: "var(--tt-text-primary)" }}>
               <option value="employee">Employee</option>
               <option value="manager">Manager</option>
+              <option value="payroll">Payroll</option>
               <option value="admin">Admin</option>
               <option value="owner">Owner</option>
             </select>

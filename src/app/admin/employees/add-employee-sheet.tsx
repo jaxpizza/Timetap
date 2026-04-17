@@ -31,6 +31,7 @@ interface AddEmployeeSheetProps {
 const roleOptions = [
   { value: "employee", label: "Employee" },
   { value: "manager", label: "Manager" },
+  { value: "payroll", label: "Payroll" },
   { value: "admin", label: "Admin" },
 ];
 

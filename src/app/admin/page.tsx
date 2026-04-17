@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getGreeting, startOfLocalToday, startOfLocalWeek } from "@/lib/utils";
 import { AdminDashboardClient } from "./dashboard-client";
+import { PayrollDashboard } from "./payroll-dashboard";
 
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
@@ -12,11 +13,16 @@ export default async function AdminDashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, organization_id")
+    .select("first_name, organization_id, role")
     .eq("id", user.id)
     .single();
 
   if (!profile?.organization_id) return null;
+
+  // Payroll role gets its own specialized dashboard
+  if (profile.role === "payroll") {
+    return <PayrollDashboard userId={user.id} orgId={profile.organization_id} firstName={profile.first_name ?? ""} />;
+  }
 
   const orgId = profile.organization_id;
 

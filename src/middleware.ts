@@ -67,7 +67,7 @@ export async function middleware(request: NextRequest) {
   const hasOrg = !!organizationId;
   const isPending = joinStatus === "pending";
   const isRejected = joinStatus === "rejected";
-  const isAdmin = role === "owner" || role === "admin" || role === "manager";
+  const isAdmin = role === "owner" || role === "admin" || role === "manager" || role === "payroll";
   const isEmployee = role === "employee";
 
   function redirectTo(path: string) {
@@ -149,9 +149,15 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/admin")) {
     if (isEmployee) return redirectTo("/dashboard");
     if (!hasOrg) return redirectTo("/onboarding");
-    // Restrict sensitive admin routes to owner/admin (not manager)
+    // Restrict sensitive admin routes by role
     const isManager = role === "manager";
+    const isPayroll = role === "payroll";
+    // Managers can't access payroll, settings, or AI
     if (isManager && (pathname.startsWith("/admin/payroll") || pathname.startsWith("/admin/settings") || pathname.startsWith("/admin/ai"))) {
+      return redirectTo("/admin");
+    }
+    // Payroll can't access schedule, PTO, AI, or settings
+    if (isPayroll && (pathname.startsWith("/admin/schedule") || pathname.startsWith("/admin/pto") || pathname.startsWith("/admin/ai") || pathname.startsWith("/admin/settings"))) {
       return redirectTo("/admin");
     }
     return response;

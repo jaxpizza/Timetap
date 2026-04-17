@@ -7,8 +7,12 @@ export default async function SchedulePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase.from("profiles").select("organization_id").eq("id", user.id).single();
+  const { data: profile } = await supabase.from("profiles").select("organization_id, role").eq("id", user.id).single();
   if (!profile?.organization_id) return null;
+  if (profile.role === "payroll") {
+    const { redirect } = await import("next/navigation");
+    redirect("/admin");
+  }
   const orgId = profile.organization_id;
 
   // Current week Sun-Sat
