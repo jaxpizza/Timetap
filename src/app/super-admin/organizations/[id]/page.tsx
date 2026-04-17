@@ -143,31 +143,77 @@ export default function OrgDetailPage() {
       {/* Tab content */}
       <div className="mt-4">
         {tab === "employees" && (
-          <div className="space-y-2">
-            {employees.map((emp: any) => {
-              const badge = roleBadge[emp.role] ?? roleBadge.employee;
-              const rate = emp.pay_rates?.find((r: any) => r.is_primary);
-              return (
-                <div key={emp.id} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px] font-bold text-white">
-                      {getInitials(emp.first_name, emp.last_name)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium" style={{ color: "var(--tt-text-primary)" }}>{capitalize(emp.first_name)} {capitalize(emp.last_name)}</p>
-                      <div className="mt-0.5 flex items-center gap-2">
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize" style={{ backgroundColor: badge.bg, color: badge.text }}>{emp.role}</span>
-                        <span className="text-[10px]" style={{ color: "var(--tt-text-muted)" }}>{emp.email}</span>
-                        {rate && <span className="font-mono text-[10px]" style={{ color: "var(--tt-text-faint)" }}>${Number(rate.rate).toFixed(2)}/{rate.type === "hourly" ? "hr" : "yr"}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={() => setEditingEmp(emp)} className="flex size-7 items-center justify-center rounded-md transition-colors hover:bg-indigo-500/10" style={{ color: "var(--tt-text-muted)" }}>
-                    <Pencil size={13} />
-                  </button>
+          <div className="space-y-4">
+            {/* Pending Approval */}
+            {employees.filter((e: any) => e.join_status === "pending").length > 0 && (
+              <div>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="size-2 animate-pulse rounded-full bg-amber-400" />
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-400">
+                    Pending Approval ({employees.filter((e: any) => e.join_status === "pending").length})
+                  </p>
                 </div>
-              );
-            })}
+                <div className="space-y-2">
+                  {employees.filter((e: any) => e.join_status === "pending").map((emp: any) => (
+                    <div key={emp.id} className="flex items-center justify-between rounded-xl px-4 py-3"
+                      style={{ backgroundColor: "rgba(251,191,36,0.04)", border: "1px solid rgba(251,191,36,0.2)" }}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-[10px] font-bold text-white">
+                          {getInitials(emp.first_name, emp.last_name)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium" style={{ color: "var(--tt-text-primary)" }}>{capitalize(emp.first_name)} {capitalize(emp.last_name)}</p>
+                          <div className="mt-0.5 flex items-center gap-2">
+                            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">Pending</span>
+                            <span className="text-[10px]" style={{ color: "var(--tt-text-muted)" }}>{emp.email}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button onClick={() => setEditingEmp(emp)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600">
+                        Approve
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Active Employees */}
+            {employees.filter((e: any) => e.join_status !== "pending").length > 0 && (
+              <div>
+                {employees.filter((e: any) => e.join_status === "pending").length > 0 && (
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: "var(--tt-text-muted)" }}>Active Employees</p>
+                )}
+                <div className="space-y-2">
+                  {employees.filter((e: any) => e.join_status !== "pending").map((emp: any) => {
+                    const badge = roleBadge[emp.role] ?? roleBadge.employee;
+                    const rate = emp.pay_rates?.find((r: any) => r.is_primary);
+                    return (
+                      <div key={emp.id} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
+                        <div className="flex items-center gap-3">
+                          <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px] font-bold text-white">
+                            {getInitials(emp.first_name, emp.last_name)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium" style={{ color: "var(--tt-text-primary)" }}>{capitalize(emp.first_name)} {capitalize(emp.last_name)}</p>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize" style={{ backgroundColor: badge.bg, color: badge.text }}>{emp.role}</span>
+                              <span className="text-[10px]" style={{ color: "var(--tt-text-muted)" }}>{emp.email}</span>
+                              {rate && <span className="font-mono text-[10px]" style={{ color: "var(--tt-text-faint)" }}>${Number(rate.rate).toFixed(2)}/{rate.type === "hourly" ? "hr" : "yr"}</span>}
+                              {emp.join_status === "rejected" && <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-400">Rejected</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => setEditingEmp(emp)} className="flex size-7 items-center justify-center rounded-md transition-colors hover:bg-indigo-500/10" style={{ color: "var(--tt-text-muted)" }}>
+                          <Pencil size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -253,7 +299,8 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
   const [fedAllowances, setFedAllowances] = useState(String(employee.federal_allowances ?? 0));
   const [stateAllowances, setStateAllowances] = useState(String(employee.state_allowances ?? 0));
   const [isActive, setIsActive] = useState(employee.is_active ?? true);
-  const [joinStatus, setJoinStatus] = useState(employee.join_status ?? "active");
+  // Pre-flip pending to active so "Save" approves them; super admin can explicitly set back to pending/rejected
+  const [joinStatus, setJoinStatus] = useState(employee.join_status === "pending" ? "active" : (employee.join_status ?? "active"));
   const [hireDate, setHireDate] = useState(employee.hire_date ?? "");
   const [loading, setLoading] = useState(false);
   const [showOwnerWarning, setShowOwnerWarning] = useState(false);
@@ -296,7 +343,13 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
     }
 
     setLoading(false);
-    if (r.success) { toast.success(isChangingToOwner ? "Ownership transferred" : "Employee updated"); onSave(); }
+    if (r.success) {
+      const wasPending = employee.join_status === "pending";
+      const isNowActive = joinStatus === "active";
+      if (wasPending && isNowActive) toast.success(`${capitalize(firstName)} approved!`);
+      else toast.success(isChangingToOwner ? "Ownership transferred" : "Employee updated");
+      onSave();
+    }
     else toast.error(r.error || "Failed");
   }
 
@@ -305,10 +358,18 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
       <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-[440px]" style={{ backgroundColor: "var(--tt-card-bg)", borderColor: "var(--tt-border)" }}>
         <SheetHeader className="border-b px-6 py-4" style={{ borderColor: "var(--tt-border-subtle)" }}>
           <SheetTitle className="font-heading text-lg font-bold" style={{ color: "var(--tt-text-primary)" }}>
-            Edit {capitalize(employee.first_name)} {capitalize(employee.last_name)}
+            {employee.join_status === "pending" ? "Approve" : "Edit"} {capitalize(employee.first_name)} {capitalize(employee.last_name)}
           </SheetTitle>
         </SheetHeader>
         <div className="space-y-4 px-6 py-5">
+          {employee.join_status === "pending" && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-400">Pending approval</p>
+              <p className="mt-1 text-xs text-amber-300">
+                Set their role, department, and pay rate, then change &quot;Join status&quot; below to &quot;Active&quot; to approve.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="First name"><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} /></Field>
             <Field label="Last name"><Input value={lastName} onChange={(e) => setLastName(e.target.value)} /></Field>
@@ -396,7 +457,7 @@ function EditEmployeeSheet({ employee, orgId, orgName, currentOwnerId, departmen
           </div>
 
           <Button onClick={handleSave} disabled={loading} className="h-11 w-full rounded-xl bg-indigo-500 text-sm font-semibold text-white hover:bg-indigo-600">
-            {loading ? <Loader2 className="size-4 animate-spin" /> : showOwnerWarning && isChangingToOwner ? "Confirm Transfer & Save" : "Save Changes"}
+            {loading ? <Loader2 className="size-4 animate-spin" /> : showOwnerWarning && isChangingToOwner ? "Confirm Transfer & Save" : employee.join_status === "pending" ? "Approve Employee" : "Save Changes"}
           </Button>
         </div>
       </SheetContent>
