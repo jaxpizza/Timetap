@@ -1,98 +1,146 @@
-"use client";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { PortalCompanyGrid } from "./portal-company-grid";
+import { PortalDashboardClient } from "./portal-dashboard-client";
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Clock, Calculator, Building2, LogOut } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+export default async function PortalRootPage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
+  const params = await searchParams;
+  const orgId = params.org;
 
-export default function PayrollPortalPage() {
-  const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/login");
 
-  useEffect(() => {
-    const supabase = createClient();
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = "/auth/login"; return; }
+  const admin = createAdminClient();
 
-      const { data } = await supabase
-        .from("payroll_provider_orgs")
-        .select("organization_id, organizations(id, name)")
-        .eq("provider_id", user.id)
-        .eq("status", "active");
+  // Verify provider role and fetch linked orgs
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role, first_name")
+    .eq("id", user.id)
+    .single();
+  if (profile?.role !== "payroll_provider") redirect("/dashboard");
 
-      const mapped = (data ?? []).map((d: any) => ({ id: d.organizations?.id, name: d.organizations?.name ?? "" })).filter((o) => o.id);
-      setOrgs(mapped);
-      setLoading(false);
+  const { data: links } = await admin
+    .from("payroll_provider_orgs")
+    .select("organization_id")
+    .eq("provider_id", user.id)
+    .eq("status", "active");
+
+  const orgIds = (links ?? []).map((l: any) => l.organization_id).filter(Boolean);
+
+  let orgs: { id: string; name: string }[] = [];
+  if (orgIds.length > 0) {
+    const { data: orgRows } = await admin
+      .from("organizations")
+      .select("id, name")
+      .in("id", orgIds);
+    orgs = (orgRows ?? []).map((o: any) => ({ id: o.id, name: o.name ?? "" }));
+  }
+
+  // No org selected → show company grid with employee counts & last payroll
+  if (!orgId) {
+    const enriched = await Promise.all(
+      orgs.map(async (o) => {
+        const [{ count: employeeCount }, { data: lastPeriod }] = await Promise.all([
+          admin.from("profiles").select("id", { count: "exact", head: true }).eq("organization_id", o.id).eq("is_active", true).eq("join_status", "active"),
+          admin.from("pay_periods").select("end_date, total_gross_pay").eq("organization_id", o.id).eq("status", "completed").order("end_date", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        return {
+          ...o,
+          employeeCount: employeeCount ?? 0,
+          lastPayrollDate: lastPeriod?.end_date ?? null,
+          lastPayrollGross: Number(lastPeriod?.total_gross_pay ?? 0),
+        };
+      })
+    );
+    return <PortalCompanyGrid orgs={enriched} />;
+  }
+
+  // Verify the orgId is one the provider has access to
+  const authorized = orgs.some((o) => o.id === orgId);
+  if (!authorized) redirect("/payroll-portal");
+
+  // Fetch dashboard stats
+  const [
+    { data: openPeriod },
+    { data: recentPayPeriods },
+    { count: employeeCount },
+    { count: pendingTimesheets },
+    { data: org },
+  ] = await Promise.all([
+    admin.from("pay_periods").select("*").eq("organization_id", orgId).in("status", ["open", "locked", "processing"]).order("start_date", { ascending: false }).limit(1).maybeSingle(),
+    admin.from("pay_periods").select("*").eq("organization_id", orgId).eq("status", "completed").order("end_date", { ascending: false }).limit(3),
+    admin.from("profiles").select("id", { count: "exact", head: true }).eq("organization_id", orgId).eq("is_active", true).eq("join_status", "active"),
+    admin.from("time_entries").select("id", { count: "exact", head: true }).eq("organization_id", orgId).eq("status", "completed"),
+    admin.from("organizations").select("overtime_threshold_weekly, name").eq("id", orgId).single(),
+  ]);
+
+  let periodHours = 0;
+  let periodOvertimeHours = 0;
+  let estimatedPayroll = 0;
+  let overtimeEmployees: { name: string; hours: number }[] = [];
+
+  if (openPeriod) {
+    const { data: entries } = await admin
+      .from("time_entries")
+      .select("profile_id, total_hours, overtime_hours, profiles!time_entries_profile_id_fkey(first_name, last_name)")
+      .eq("organization_id", orgId)
+      .in("status", ["completed", "approved"])
+      .gte("clock_in", openPeriod.start_date + "T00:00:00")
+      .lte("clock_in", openPeriod.end_date + "T23:59:59");
+
+    const { data: rates } = await admin
+      .from("pay_rates")
+      .select("profile_id, rate, type")
+      .eq("organization_id", orgId)
+      .eq("is_primary", true);
+
+    const rateMap = new Map<string, number>();
+    for (const pr of rates ?? []) rateMap.set(pr.profile_id, pr.type === "salary" ? Number(pr.rate) / 2080 : Number(pr.rate));
+
+    const hoursByEmployee = new Map<string, { name: string; hours: number }>();
+    for (const e of entries ?? []) {
+      const hrs = Number(e.total_hours ?? 0);
+      periodHours += hrs;
+      periodOvertimeHours += Number(e.overtime_hours ?? 0);
+      const rate = rateMap.get(e.profile_id) ?? 0;
+      estimatedPayroll += hrs * rate;
+      const prof = e.profiles as any;
+      const name = prof ? `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim() : "Employee";
+      const existing = hoursByEmployee.get(e.profile_id) ?? { name, hours: 0 };
+      existing.hours += hrs;
+      hoursByEmployee.set(e.profile_id, existing);
     }
-    load();
-  }, []);
 
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/auth/login";
+    const threshold = org?.overtime_threshold_weekly ?? 40;
+    overtimeEmployees = Array.from(hoursByEmployee.values())
+      .filter((e) => e.hours >= threshold * 0.9)
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 8);
   }
 
   return (
-    <div className="min-h-screen px-4 py-12" style={{ backgroundColor: "var(--tt-page-bg)" }}>
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mx-auto max-w-3xl"
-      >
-        <div className="mb-8 flex items-center justify-between">
-          <div className="inline-flex items-center gap-2">
-            <Clock className="size-7 text-timetap-primary-400" />
-            <span className="font-heading text-2xl font-extrabold tracking-tight">
-              <span style={{ color: "var(--tt-text-primary)" }}>Time</span>
-              <span className="text-timetap-primary-400">Tap</span>
-            </span>
-            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">Payroll Provider</span>
-          </div>
-          <button onClick={handleSignOut} className="flex items-center gap-1 text-xs transition-colors hover:text-rose-400" style={{ color: "var(--tt-text-muted)" }}>
-            <LogOut size={12} /> Sign out
-          </button>
-        </div>
-
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-xl" style={{ backgroundColor: "rgba(245,158,11,0.1)" }}>
-            <Calculator size={24} className="text-amber-400" />
-          </div>
-          <div>
-            <h1 className="font-heading text-2xl font-bold" style={{ color: "var(--tt-text-primary)" }}>Payroll Portal</h1>
-            <p className="text-sm" style={{ color: "var(--tt-text-tertiary)" }}>Manage payroll across your client companies</p>
-          </div>
-        </div>
-
-        {loading && <p className="text-center text-sm" style={{ color: "var(--tt-text-muted)" }}>Loading...</p>}
-
-        {!loading && orgs.length === 0 && (
-          <div className="rounded-xl p-8 text-center" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
-            <Building2 size={32} strokeWidth={1.5} className="mx-auto" style={{ color: "var(--tt-text-muted)" }} />
-            <p className="mt-3 text-sm" style={{ color: "var(--tt-text-muted)" }}>No active companies yet</p>
-          </div>
-        )}
-
-        {!loading && orgs.length > 0 && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {orgs.map((org) => (
-              <div key={org.id} className="rounded-xl p-5" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-lg" style={{ backgroundColor: "rgba(129,140,248,0.1)" }}>
-                    <Building2 size={18} style={{ color: "#818CF8" }} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>{org.name}</p>
-                    <p className="text-xs" style={{ color: "var(--tt-text-muted)" }}>Active client</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
-    </div>
+    <PortalDashboardClient
+      orgId={orgId}
+      orgName={org?.name ?? ""}
+      providerFirstName={profile?.first_name ?? ""}
+      openPeriod={openPeriod ? { id: openPeriod.id, startDate: openPeriod.start_date, endDate: openPeriod.end_date, status: openPeriod.status } : null}
+      periodHours={periodHours}
+      periodOvertimeHours={periodOvertimeHours}
+      estimatedPayroll={estimatedPayroll}
+      pendingTimesheetsCount={pendingTimesheets ?? 0}
+      employeeCount={employeeCount ?? 0}
+      recentPayPeriods={(recentPayPeriods ?? []).map((p: any) => ({
+        id: p.id,
+        startDate: p.start_date,
+        endDate: p.end_date,
+        totalGross: Number(p.total_gross_pay ?? 0),
+        totalHours: Number(p.total_hours ?? 0),
+      }))}
+      overtimeEmployees={overtimeEmployees}
+      overtimeThreshold={org?.overtime_threshold_weekly ?? 40}
+    />
   );
 }

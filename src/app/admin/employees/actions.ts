@@ -290,12 +290,17 @@ export async function approvePayrollProvider(
   if (!user) return { success: false, error: "Not authenticated" };
 
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("payroll_provider_orgs")
     .update({ status: "active", approved_by: user.id, approved_at: new Date().toISOString() })
     .eq("provider_id", providerId)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .select("id, status");
+
   if (error) return { success: false, error: error.message };
+  if (!updated || updated.length === 0) {
+    return { success: false, error: "No matching provider request found" };
+  }
 
   // Notify the provider
   const { data: org } = await admin.from("organizations").select("name").eq("id", organizationId).single();
