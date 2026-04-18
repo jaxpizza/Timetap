@@ -280,3 +280,47 @@ export async function rejectEmployee(
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
+
+export async function approvePayrollProvider(
+  providerId: string,
+  organizationId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createReadOnlyClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("payroll_provider_orgs")
+    .update({ status: "active", approved_by: user.id, approved_at: new Date().toISOString() })
+    .eq("provider_id", providerId)
+    .eq("organization_id", organizationId);
+  if (error) return { success: false, error: error.message };
+
+  // Notify the provider
+  const { data: org } = await admin.from("organizations").select("name").eq("id", organizationId).single();
+  await admin.from("notifications").insert({
+    organization_id: organizationId,
+    profile_id: providerId,
+    type: "payroll_provider_approved",
+    title: "Access granted",
+    message: `You've been approved to manage payroll for ${org?.name ?? "the organization"}`,
+    link: "/payroll-portal",
+  });
+
+  return { success: true };
+}
+
+export async function denyPayrollProvider(
+  providerId: string,
+  organizationId: string
+): Promise<{ success: boolean; error?: string }> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("payroll_provider_orgs")
+    .update({ status: "revoked" })
+    .eq("provider_id", providerId)
+    .eq("organization_id", organizationId);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}

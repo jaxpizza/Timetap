@@ -4,7 +4,32 @@
 
 // ---------- Enums / Union Types ----------
 
-export type UserRole = "owner" | "admin" | "payroll" | "manager" | "employee";
+export type UserRole = "owner" | "admin" | "payroll" | "payroll_provider" | "manager" | "employee";
+export type PayrollProviderOrgStatus = "pending" | "active" | "revoked";
+
+export interface PayrollProviderOrg {
+  id: string;
+  provider_id: string;
+  organization_id: string;
+  status: PayrollProviderOrgStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+}
+
+export interface PayrollProviderOrgInsert {
+  provider_id: string;
+  organization_id: string;
+  status?: PayrollProviderOrgStatus;
+  approved_by?: string | null;
+  approved_at?: string | null;
+}
+
+export interface PayrollProviderOrgUpdate {
+  status?: PayrollProviderOrgStatus;
+  approved_by?: string | null;
+  approved_at?: string | null;
+}
 export type PayPeriodType = "weekly" | "biweekly" | "semimonthly" | "monthly";
 export type SubscriptionTier = "free" | "pro" | "enterprise";
 export type PayRateType = "hourly" | "salary";

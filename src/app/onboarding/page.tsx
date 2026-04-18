@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Building2, UserPlus, Clock, Loader2 } from "lucide-react";
+import { Building2, UserPlus, Clock, Loader2, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectPremium } from "@/components/ui/select-premium";
-import { createOrganization, joinOrganization } from "./actions";
+import { createOrganization, joinOrganization, setupPayrollProvider } from "./actions";
 
-type Selection = "create" | "join" | null;
+type Selection = "create" | "join" | "provider" | null;
 
 const timezones = [
   { value: "America/New_York", label: "Eastern (ET)" },
@@ -38,6 +38,9 @@ export default function OnboardingPage() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [error, setError] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [providerCode, setProviderCode] = useState("");
+  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerError, setProviderError] = useState("");
 
   function formatInviteCode(raw: string) {
     const clean = raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().substring(0, 8);
@@ -63,6 +66,23 @@ export default function OnboardingPage() {
     }
     toast.success("Request submitted!");
     window.location.href = "/dashboard/pending";
+  }
+
+  async function handleProviderSetup(e: React.FormEvent) {
+    e.preventDefault();
+    const code = providerCode.trim();
+    if (code.length < 9) { setProviderError("Enter a valid invite code"); return; }
+    setProviderLoading(true);
+    setProviderError("");
+    const result = await setupPayrollProvider(code);
+    setProviderLoading(false);
+    if (!result.success) {
+      toast.error(result.error || "Failed");
+      setProviderError(result.error || "Failed");
+      return;
+    }
+    toast.success("Request submitted!");
+    window.location.href = "/payroll-portal/pending";
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -115,7 +135,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Option cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <button
           type="button"
           onClick={() => setSelection("create")}
@@ -147,6 +167,22 @@ export default function OnboardingPage() {
           <h3 className="mt-3 font-semibold text-white">Join a company</h3>
           <p className="mt-1 text-sm text-zinc-400">
             Enter an invite code from your employer
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelection("provider")}
+          className={`rounded-card border bg-card p-6 text-left transition-all duration-200 cursor-pointer hover:bg-zinc-800/50 hover:scale-[1.02] ${
+            selection === "provider"
+              ? "border-amber-500 ring-2 ring-amber-500/20"
+              : "border-zinc-700/80 hover:border-amber-500/50"
+          }`}
+        >
+          <Calculator className="size-8 text-amber-500" />
+          <h3 className="mt-3 font-semibold text-white">Payroll Provider</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Manage payroll for multiple companies from one account
           </p>
         </button>
       </div>
@@ -263,6 +299,48 @@ export default function OnboardingPage() {
                   ) : (
                     "Join"
                   )}
+                </Button>
+              </form>
+            </div>
+          </motion.div>
+        )}
+
+        {selection === "provider" && (
+          <motion.div
+            key="provider"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="mt-6 rounded-card border border-zinc-700/80 bg-card p-6 shadow-xl shadow-black/20 ring-1 ring-white/[0.03]">
+              <form onSubmit={handleProviderSetup} className="space-y-5">
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Company invite code</Label>
+                  <Input
+                    value={providerCode}
+                    onChange={(e) => {
+                      setProviderCode(formatInviteCode(e.target.value));
+                      if (providerError) setProviderError("");
+                    }}
+                    placeholder="ABCD-1234"
+                    className="text-center font-mono text-2xl tracking-[0.3em] uppercase"
+                    maxLength={9}
+                    aria-invalid={!!providerError}
+                  />
+                  {providerError && <p className="text-center text-xs text-destructive">{providerError}</p>}
+                  <p className="text-center text-xs" style={{ color: "var(--tt-text-muted)" }}>
+                    Ask your client for their TimeTap invite code. You can add more companies later.
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={providerLoading || providerCode.length < 9}
+                  className="h-11 w-full rounded-button bg-amber-500 text-sm font-semibold text-white transition-all hover:bg-amber-600 hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  {providerLoading ? <Loader2 className="size-4 animate-spin" /> : "Set up as Payroll Provider"}
                 </Button>
               </form>
             </div>

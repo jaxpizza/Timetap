@@ -69,6 +69,19 @@ export async function middleware(request: NextRequest) {
   const isRejected = joinStatus === "rejected";
   const isAdmin = role === "owner" || role === "admin" || role === "manager" || role === "payroll";
   const isEmployee = role === "employee";
+  const isPayrollProvider = role === "payroll_provider";
+
+  // Check payroll_provider org links (only when relevant)
+  let hasActiveProviderOrg = false;
+  let hasAnyProviderOrg = false;
+  if (user && isPayrollProvider) {
+    const { data: ppos } = await supabase
+      .from("payroll_provider_orgs")
+      .select("status")
+      .eq("provider_id", user.id);
+    hasAnyProviderOrg = !!(ppos && ppos.length > 0);
+    hasActiveProviderOrg = !!(ppos && ppos.some((p: any) => p.status === "active"));
+  }
 
   function redirectTo(path: string) {
     const url = request.nextUrl.clone();
@@ -78,6 +91,11 @@ export async function middleware(request: NextRequest) {
 
   function roleBasedRedirect() {
     if (isPending) return redirectTo("/dashboard/pending");
+    if (isPayrollProvider) {
+      if (!hasAnyProviderOrg) return redirectTo("/onboarding");
+      if (!hasActiveProviderOrg) return redirectTo("/payroll-portal/pending");
+      return redirectTo("/payroll-portal");
+    }
     if (isAdmin) return redirectTo("/admin");
     if (isEmployee) return redirectTo("/dashboard");
     return redirectTo("/onboarding");
@@ -92,9 +110,30 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Payroll portal routes
+  if (pathname.startsWith("/payroll-portal")) {
+    if (!user) return redirectTo("/auth/login");
+    if (!isPayrollProvider) return redirectTo("/");
+    if (pathname === "/payroll-portal/pending") {
+      if (hasActiveProviderOrg) return redirectTo("/payroll-portal");
+      return response;
+    }
+    if (!hasAnyProviderOrg) return redirectTo("/onboarding");
+    if (!hasActiveProviderOrg) return redirectTo("/payroll-portal/pending");
+    return response;
+  }
+
+  // Payroll providers can't access /admin or /dashboard
+  if (isPayrollProvider && (pathname.startsWith("/admin") || pathname.startsWith("/dashboard"))) {
+    if (!hasAnyProviderOrg) return redirectTo("/onboarding");
+    if (!hasActiveProviderOrg) return redirectTo("/payroll-portal/pending");
+    return redirectTo("/payroll-portal");
+  }
+
   // Root — show landing page to unauthenticated users
   if (pathname === "/") {
     if (!user) return response; // Let them see the landing page
+    if (isPayrollProvider) return roleBasedRedirect();
     if (isRejected || !hasOrg) return redirectTo("/onboarding");
     return roleBasedRedirect();
   }
@@ -104,6 +143,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/auth/reset-password")) return response;
     if (pathname.startsWith("/auth/callback")) return response;
     if (user) {
+      if (isPayrollProvider) return roleBasedRedirect();
       if (isRejected || !hasOrg) return redirectTo("/onboarding");
       return roleBasedRedirect();
     }

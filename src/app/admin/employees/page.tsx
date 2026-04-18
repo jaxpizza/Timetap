@@ -25,6 +25,7 @@ export default async function EmployeesPage() {
     { data: pendingEmployees },
     { data: payRates },
     { data: departments },
+    { data: pendingProviders },
   ] = await Promise.all([
     supabase.from("organizations").select("invite_code").eq("id", orgId).single(),
     supabase
@@ -45,6 +46,11 @@ export default async function EmployeesPage() {
       .eq("organization_id", orgId)
       .eq("is_primary", true),
     supabase.from("departments").select("*").eq("organization_id", orgId),
+    supabase
+      .from("payroll_provider_orgs")
+      .select("id, provider_id, status, created_at, profiles!payroll_provider_orgs_provider_id_fkey(id, first_name, last_name, email)")
+      .eq("organization_id", orgId)
+      .eq("status", "pending"),
   ]);
 
   return (
@@ -56,6 +62,7 @@ export default async function EmployeesPage() {
       organizationId={orgId}
       currentUserId={user.id}
       inviteCode={org?.invite_code ?? ""}
+      pendingProviders={(pendingProviders ?? []) as any}
     />
   );
 }

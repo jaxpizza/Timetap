@@ -48,6 +48,8 @@ import {
   reactivateEmployee,
   deleteEmployee,
   rejectEmployee,
+  approvePayrollProvider,
+  denyPayrollProvider,
 } from "./actions";
 
 function capitalize(s?: string | null) {
@@ -124,6 +126,14 @@ function InviteCodeBar({ code }: { code: string }) {
   );
 }
 
+interface PendingProvider {
+  id: string;
+  provider_id: string;
+  status: string;
+  created_at: string;
+  profiles: { id: string; first_name: string | null; last_name: string | null; email: string } | null;
+}
+
 export function EmployeesClient({
   employees,
   pendingEmployees,
@@ -132,6 +142,7 @@ export function EmployeesClient({
   organizationId,
   currentUserId,
   inviteCode = "",
+  pendingProviders = [],
 }: {
   employees: Profile[];
   pendingEmployees: Profile[];
@@ -140,6 +151,7 @@ export function EmployeesClient({
   organizationId: string;
   currentUserId: string;
   inviteCode?: string;
+  pendingProviders?: PendingProvider[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -244,9 +256,9 @@ export function EmployeesClient({
           }}
         >
           Pending
-          {pendingEmployees.length > 0 && (
+          {(pendingEmployees.length + pendingProviders.length) > 0 && (
             <span className="ml-1.5 inline-flex size-5 items-center justify-center rounded-full bg-amber-500/20 text-[11px] font-bold text-amber-400">
-              {pendingEmployees.length}
+              {pendingEmployees.length + pendingProviders.length}
             </span>
           )}
         </button>
@@ -291,7 +303,7 @@ export function EmployeesClient({
       {/* Pending Tab */}
       {tab === "pending" && (
         <>
-          {pendingEmployees.length === 0 ? (
+          {pendingEmployees.length === 0 && pendingProviders.length === 0 ? (
             <div className="mt-12 flex flex-col items-center rounded-xl py-12" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
               <Clock size={28} strokeWidth={1.5} style={{ color: "var(--tt-text-muted)" }} />
               <p className="mt-3 text-sm font-medium" style={{ color: "var(--tt-text-primary)" }}>No pending requests</p>
@@ -299,6 +311,9 @@ export function EmployeesClient({
             </div>
           ) : (
             <motion.div variants={cardAnim} initial="hidden" animate="show" className="mt-4 space-y-3">
+              {pendingProviders.map((p) => (
+                <ProviderRequestCard key={p.id} provider={p} organizationId={organizationId} onAction={() => window.location.reload()} />
+              ))}
               {pendingEmployees.map((emp) => (
                 <motion.div
                   key={emp.id}
@@ -493,5 +508,56 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <UserPlus size={16} /> Add Employee
       </button>
     </div>
+  );
+}
+
+function ProviderRequestCard({ provider, organizationId, onAction }: { provider: PendingProvider; organizationId: string; onAction: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+  const name = `${capitalize(provider.profiles?.first_name)} ${capitalize(provider.profiles?.last_name)}`.trim() || "Payroll Provider";
+
+  async function handleApprove() {
+    setLoading("approve");
+    const r = await approvePayrollProvider(provider.provider_id, organizationId);
+    setLoading(null);
+    r.success ? (toast.success(`${name} approved`), onAction()) : toast.error(r.error || "Failed");
+  }
+
+  async function handleDeny() {
+    setLoading("deny");
+    const r = await denyPayrollProvider(provider.provider_id, organizationId);
+    setLoading(null);
+    r.success ? (toast.success("Request denied"), onAction()) : toast.error(r.error || "Failed");
+  }
+
+  return (
+    <motion.div variants={cardItem}
+      className="flex items-center justify-between rounded-xl p-4"
+      style={{ backgroundColor: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.25)" }}>
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-sm font-bold text-white">
+          {getInitials(provider.profiles?.first_name ?? undefined, provider.profiles?.last_name ?? undefined)}
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold" style={{ color: "var(--tt-text-primary)" }}>{name}</p>
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">Payroll Provider</span>
+          </div>
+          <p className="text-xs" style={{ color: "var(--tt-text-muted)" }}>{provider.profiles?.email}</p>
+          <p className="mt-0.5 text-[11px]" style={{ color: "var(--tt-text-faint)" }}>
+            Wants to manage your payroll
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={handleApprove} disabled={!!loading}
+          className="rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20">
+          {loading === "approve" ? "..." : "Approve"}
+        </button>
+        <button onClick={handleDeny} disabled={!!loading}
+          className="rounded-lg bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-400 transition-colors hover:bg-rose-500/20">
+          {loading === "deny" ? "..." : "Deny"}
+        </button>
+      </div>
+    </motion.div>
   );
 }
