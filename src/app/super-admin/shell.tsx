@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Building2, Users, CreditCard, Server, Shield, LogOut, Sun, Moon } from "lucide-react";
+import { LayoutDashboard, Building2, Users, CreditCard, Server, Shield, LogOut, Sun, Moon, Inbox } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/components/theme-provider";
 
 const nav = [
   { label: "Overview", icon: LayoutDashboard, href: "/super-admin" },
+  { label: "Pending Requests", icon: Inbox, href: "/super-admin/pending" },
   { label: "Organizations", icon: Building2, href: "/super-admin/organizations" },
   { label: "All Users", icon: Users, href: "/super-admin/users" },
   { label: "Subscriptions", icon: CreditCard, href: "/super-admin/subscriptions" },
