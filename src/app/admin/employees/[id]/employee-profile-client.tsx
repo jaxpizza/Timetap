@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, MapPin, Clock, Coffee, ChevronDown, Calendar } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Coffee, ChevronDown, Calendar, PenSquare, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { DynamicLocationMapView } from "@/components/dynamic-map";
+import { ManualEntrySheet, ManualEntryExisting } from "@/components/manual-entry-sheet";
+import { addManualEntry, editTimeEntry, deleteTimeEntry } from "@/app/admin/timesheets/actions";
 
 /* ── types ── */
 
@@ -73,6 +76,8 @@ interface Props {
   schedules: Schedule[];
   locations: WorkLocation[];
   stats: { weekHours: number; monthHours: number; avgPerDay: number; offSiteCount: number };
+  organizationId?: string;
+  adderName?: string;
 }
 
 /* ── helpers ── */
@@ -101,9 +106,28 @@ const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { st
 
 /* ── main ── */
 
-export function EmployeeProfileClient({ profile, payRate, hourlyRate, entries, ptoBalances, schedules, locations, stats }: Props) {
+export function EmployeeProfileClient({ profile, payRate, hourlyRate, entries, ptoBalances, schedules, locations, stats, organizationId = "", adderName = "Admin" }: Props) {
+  const router = useRouter();
   const badge = roleBadge[profile.role] ?? roleBadge.employee;
   const fullName = `${capitalize(profile.first_name)} ${capitalize(profile.last_name)}`.trim();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<ManualEntryExisting | null>(null);
+
+  const employeeList = [{ id: profile.id, first_name: profile.first_name, last_name: profile.last_name, email: profile.email }];
+  const payRateList = payRate ? [{ profile_id: profile.id, rate: Number(payRate.rate), type: payRate.type }] : [];
+
+  function openAdd() { setEditingEntry(null); setSheetOpen(true); }
+  function openEditEntry(e: Entry) {
+    setEditingEntry({
+      id: e.id,
+      profile_id: profile.id,
+      clock_in: e.clock_in,
+      clock_out: e.clock_out,
+      total_break_minutes: e.total_break_minutes,
+      notes: e.notes,
+    });
+    setSheetOpen(true);
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="max-w-3xl">
@@ -203,9 +227,14 @@ export function EmployeeProfileClient({ profile, payRate, hourlyRate, entries, p
 
       {/* Shift History */}
       <div className="mt-6">
-        <div className="flex items-baseline justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: "var(--tt-text-muted)" }}>Shift History</p>
-          <p className="text-xs" style={{ color: "var(--tt-text-faint)" }}>Last 30 days</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: "var(--tt-text-muted)" }}>Shift History</p>
+            <p className="text-xs" style={{ color: "var(--tt-text-faint)" }}>Last 30 days</p>
+          </div>
+          <button onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-medium text-indigo-300 transition-colors hover:bg-indigo-500/20">
+            <Plus size={11} /> Manual Entry
+          </button>
         </div>
         {entries.length === 0 ? (
           <div className="mt-4 flex flex-col items-center rounded-xl py-12" style={{ backgroundColor: "var(--tt-card-bg)", border: "1px solid var(--tt-border-subtle)" }}>
@@ -215,11 +244,49 @@ export function EmployeeProfileClient({ profile, payRate, hourlyRate, entries, p
         ) : (
           <motion.div variants={container} initial="hidden" animate="show" className="mt-3 space-y-2">
             {entries.map((entry) => (
-              <ShiftHistoryCard key={entry.id} entry={entry} hourlyRate={hourlyRate} locations={locations} />
+              <ShiftHistoryCard key={entry.id} entry={entry} hourlyRate={hourlyRate} locations={locations} onEdit={() => openEditEntry(entry)} />
             ))}
           </motion.div>
         )}
       </div>
+
+      <ManualEntrySheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        mode={editingEntry ? "edit" : "add"}
+        employees={employeeList}
+        payRates={payRateList}
+        lockedEmployeeId={profile.id}
+        existing={editingEntry}
+        adderName={adderName}
+        onAdd={async (p) => {
+          const [y, m, d] = p.date.split("-").map(Number);
+          const [ih, im] = p.clockInTime.split(":").map(Number);
+          const [oh, om] = p.clockOutTime.split(":").map(Number);
+          const inDate = new Date(y, (m ?? 1) - 1, (d ?? 1), ih ?? 0, im ?? 0);
+          const outDate = new Date(y, (m ?? 1) - 1, (d ?? 1) + (p.overnight ? 1 : 0), oh ?? 0, om ?? 0);
+          const r = await addManualEntry({
+            profileId: profile.id,
+            organizationId,
+            clockIn: inDate.toISOString(),
+            clockOut: outDate.toISOString(),
+            breakMinutes: p.breakMinutes,
+            notes: p.notes,
+          });
+          if (r.success) router.refresh();
+          return { success: r.success, error: r.error };
+        }}
+        onEdit={async (p) => {
+          const r = await editTimeEntry({ entryId: p.entryId, clockIn: p.clockIn, clockOut: p.clockOut, breakMinutes: p.breakMinutes, notes: p.notes });
+          if (r.success) router.refresh();
+          return r;
+        }}
+        onDelete={async (id) => {
+          const r = await deleteTimeEntry(id);
+          if (r.success) router.refresh();
+          return r;
+        }}
+      />
     </motion.div>
   );
 }
@@ -244,7 +311,7 @@ function Detail({ label, value, mono }: { label: string; value: string; mono?: b
   );
 }
 
-function ShiftHistoryCard({ entry, hourlyRate, locations }: { entry: Entry; hourlyRate: number; locations: WorkLocation[] }) {
+function ShiftHistoryCard({ entry, hourlyRate, locations, onEdit }: { entry: Entry; hourlyRate: number; locations: WorkLocation[]; onEdit?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const hours = entry.total_hours ?? 0;
   const breakMin = entry.total_break_minutes ?? 0;
@@ -290,6 +357,16 @@ function ShiftHistoryCard({ entry, hourlyRate, locations }: { entry: Entry; hour
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: st.bg, color: st.color }}>{st.label}</span>
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="flex size-6 items-center justify-center rounded-md transition-colors hover:bg-[var(--tt-elevated-bg)]"
+              style={{ color: "var(--tt-text-muted)" }}
+              title="Edit entry"
+            >
+              <PenSquare size={13} />
+            </button>
+          )}
           {hasGeo && <ChevronDown size={14} className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} style={{ color: "var(--tt-text-muted)" }} />}
         </div>
       </button>

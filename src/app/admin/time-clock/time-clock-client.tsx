@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, MapPin } from "lucide-react";
+import { Clock, MapPin, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { DynamicLocationMapView as LocationMapView } from "@/components/dynamic-map";
+import { ManualEntrySheet } from "@/components/manual-entry-sheet";
+import { addManualEntry } from "@/app/admin/timesheets/actions";
 
 interface ActiveEntry {
   id: string; profile_id: string; clock_in: string; total_break_minutes: number;
@@ -32,12 +34,15 @@ function useElapsedAll(entries: ActiveEntry[]) {
   return entries.map((e) => Math.max(0, (Date.now() - new Date(e.clock_in).getTime()) / 1000));
 }
 
-export function TimeClockClient({ activeEntries, payRates, locations, recentClockIns, jobSites = [] }: {
-  activeEntries: ActiveEntry[]; payRates: PayRate[]; locations: Location[]; recentClockIns: ClockIn[]; jobSites?: JobSite[];
+interface EmployeeBasic { id: string; first_name: string | null; last_name: string | null; email: string }
+
+export function TimeClockClient({ activeEntries, payRates, locations, recentClockIns, jobSites = [], employees = [], adderName = "Admin", organizationId = "" }: {
+  activeEntries: ActiveEntry[]; payRates: PayRate[]; locations: Location[]; recentClockIns: ClockIn[]; jobSites?: JobSite[]; employees?: EmployeeBasic[]; adderName?: string; organizationId?: string;
 }) {
   const router = useRouter();
   const elapsed = useElapsedAll(activeEntries);
   const [tab, setTab] = useState<"live" | "map">("live");
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => { const id = setInterval(() => router.refresh(), 15000); return () => clearInterval(id); }, [router]);
 
@@ -62,9 +67,14 @@ export function TimeClockClient({ activeEntries, payRates, locations, recentCloc
           <h1 className="font-heading text-2xl font-bold" style={{ color: "var(--tt-text-primary)" }}>Time Clock</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>Live activity and location tracking</p>
         </div>
-        {activeEntries.length > 0 && (
-          <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400">{activeEntries.length} active</span>
-        )}
+        <div className="flex items-center gap-2">
+          {activeEntries.length > 0 && (
+            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400">{activeEntries.length} active</span>
+          )}
+          <button onClick={() => setSheetOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-600">
+            <Plus size={14} /> Manual Entry
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -155,6 +165,32 @@ export function TimeClockClient({ activeEntries, payRates, locations, recentCloc
           )}
         </div>
       )}
+
+      <ManualEntrySheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        mode="add"
+        employees={employees}
+        payRates={payRates}
+        adderName={adderName}
+        onAdd={async (p) => {
+          const [y, m, d] = p.date.split("-").map(Number);
+          const [ih, im] = p.clockInTime.split(":").map(Number);
+          const [oh, om] = p.clockOutTime.split(":").map(Number);
+          const inDate = new Date(y, (m ?? 1) - 1, (d ?? 1), ih ?? 0, im ?? 0);
+          const outDate = new Date(y, (m ?? 1) - 1, (d ?? 1) + (p.overnight ? 1 : 0), oh ?? 0, om ?? 0);
+          const r = await addManualEntry({
+            profileId: p.profileId,
+            organizationId,
+            clockIn: inDate.toISOString(),
+            clockOut: outDate.toISOString(),
+            breakMinutes: p.breakMinutes,
+            notes: p.notes,
+          });
+          if (r.success) router.refresh();
+          return { success: r.success, error: r.error };
+        }}
+      />
     </motion.div>
   );
 }

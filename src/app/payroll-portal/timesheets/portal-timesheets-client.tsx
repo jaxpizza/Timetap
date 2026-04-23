@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { CheckCircle, AlertTriangle, Clock, FileText, ChevronDown, ChevronUp, Undo2, MapPin } from "lucide-react";
+import { CheckCircle, AlertTriangle, Clock, FileText, ChevronDown, ChevronUp, Undo2, MapPin, Plus, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { approveTimeEntry, approveAllForEmployee, flagTimeEntry, unflagTimeEntry } from "./actions";
+import { approveTimeEntry, approveAllForEmployee, flagTimeEntry, unflagTimeEntry, addManualEntryAsProvider, editTimeEntryAsProvider, deleteTimeEntryAsProvider } from "./actions";
+import { ManualEntrySheet, ManualEntryExisting } from "@/components/manual-entry-sheet";
 
 interface Entry {
   id: string;
@@ -41,8 +42,10 @@ function groupByEmployee(entries: Entry[]) {
   return Array.from(map.entries());
 }
 
+interface Employee { id: string; first_name: string | null; last_name: string | null; email: string }
+
 export function PortalTimesheetsClient({
-  orgId, orgName, pendingEntries, approvedEntries, flaggedEntries, payRates, departments,
+  orgId, orgName, pendingEntries, approvedEntries, flaggedEntries, payRates, departments, employees = [], adderName = "Payroll Provider",
 }: {
   orgId: string;
   orgName: string;
@@ -51,9 +54,26 @@ export function PortalTimesheetsClient({
   flaggedEntries: Entry[];
   payRates: PayRate[];
   departments: Department[];
+  employees?: Employee[];
+  adderName?: string;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"pending" | "approved" | "flagged">("pending");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<ManualEntryExisting | null>(null);
+
+  function openAdd() { setEditingEntry(null); setSheetOpen(true); }
+  function openEdit(entry: Entry) {
+    setEditingEntry({
+      id: entry.id,
+      profile_id: entry.profile_id,
+      clock_in: entry.clock_in,
+      clock_out: entry.clock_out,
+      total_break_minutes: entry.total_break_minutes,
+      notes: entry.notes,
+    });
+    setSheetOpen(true);
+  }
 
   const rateMap = new Map<string, PayRate>();
   for (const r of payRates) rateMap.set(r.profile_id, r);
@@ -91,12 +111,17 @@ export function PortalTimesheetsClient({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div>
-        <div className="flex items-center gap-2">
-          <h1 className="font-heading text-2xl font-bold" style={{ color: "var(--tt-text-primary)" }}>Timesheets</h1>
-          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">Review</span>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="font-heading text-2xl font-bold" style={{ color: "var(--tt-text-primary)" }}>Timesheets</h1>
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">Review</span>
+          </div>
+          <p className="mt-1 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>{orgName}</p>
         </div>
-        <p className="mt-1 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>{orgName}</p>
+        <button onClick={openAdd} className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600">
+          <Plus size={13} /> Manual Entry
+        </button>
       </div>
 
       {/* Tabs */}
@@ -128,10 +153,55 @@ export function PortalTimesheetsClient({
               onApproveAll={handleApproveAll}
               onFlag={handleFlag}
               onUnflag={handleUnflag}
+              onEdit={openEdit}
             />
           ))}
         </div>
       )}
+
+      <ManualEntrySheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        mode={editingEntry ? "edit" : "add"}
+        employees={employees}
+        payRates={payRates}
+        existing={editingEntry}
+        adderName={adderName}
+        onAdd={async (p) => {
+          const [y, m, d] = p.date.split("-").map(Number);
+          const [ih, im] = p.clockInTime.split(":").map(Number);
+          const [oh, om] = p.clockOutTime.split(":").map(Number);
+          const inDate = new Date(y, (m ?? 1) - 1, (d ?? 1), ih ?? 0, im ?? 0);
+          const outDate = new Date(y, (m ?? 1) - 1, (d ?? 1) + (p.overnight ? 1 : 0), oh ?? 0, om ?? 0);
+          const r = await addManualEntryAsProvider({
+            organizationId: orgId,
+            profileId: p.profileId,
+            clockIn: inDate.toISOString(),
+            clockOut: outDate.toISOString(),
+            breakMinutes: p.breakMinutes,
+            notes: p.notes,
+          });
+          if (r.success) router.refresh();
+          return { success: r.success, error: r.error };
+        }}
+        onEdit={async (p) => {
+          const r = await editTimeEntryAsProvider({
+            organizationId: orgId,
+            entryId: p.entryId,
+            clockIn: p.clockIn,
+            clockOut: p.clockOut,
+            breakMinutes: p.breakMinutes,
+            notes: p.notes,
+          });
+          if (r.success) router.refresh();
+          return r;
+        }}
+        onDelete={async (id) => {
+          const r = await deleteTimeEntryAsProvider(orgId, id);
+          if (r.success) router.refresh();
+          return r;
+        }}
+      />
     </motion.div>
   );
 }
@@ -155,7 +225,7 @@ function TabButton({ label, count, active, onClick }: { label: string; count: nu
 }
 
 function EmployeeGroup({
-  profileId, entries, rate, deptMap, tab, onApprove, onApproveAll, onFlag, onUnflag,
+  profileId, entries, rate, deptMap, tab, onApprove, onApproveAll, onFlag, onUnflag, onEdit,
 }: {
   profileId: string;
   entries: Entry[];
@@ -166,6 +236,7 @@ function EmployeeGroup({
   onApproveAll: (profileId: string) => void;
   onFlag: (id: string) => void;
   onUnflag: (id: string) => void;
+  onEdit: (e: Entry) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const p = entries[0]?.profiles;
@@ -204,7 +275,7 @@ function EmployeeGroup({
       {expanded && (
         <div className="border-t" style={{ borderColor: "var(--tt-border-faint)" }}>
           {entries.map((e, i) => (
-            <EntryRow key={e.id} entry={e} hourlyRate={hourlyRate} tab={tab} onApprove={onApprove} onFlag={onFlag} onUnflag={onUnflag}
+            <EntryRow key={e.id} entry={e} hourlyRate={hourlyRate} tab={tab} onApprove={onApprove} onFlag={onFlag} onUnflag={onUnflag} onEdit={onEdit}
               last={i === entries.length - 1} />
           ))}
         </div>
@@ -213,13 +284,14 @@ function EmployeeGroup({
   );
 }
 
-function EntryRow({ entry, hourlyRate, tab, onApprove, onFlag, onUnflag, last }: {
+function EntryRow({ entry, hourlyRate, tab, onApprove, onFlag, onUnflag, onEdit, last }: {
   entry: Entry;
   hourlyRate: number;
   tab: "pending" | "approved" | "flagged";
   onApprove: (id: string) => void;
   onFlag: (id: string) => void;
   onUnflag: (id: string) => void;
+  onEdit: (e: Entry) => void;
   last: boolean;
 }) {
   const hrs = Number(entry.total_hours ?? 0);
@@ -266,6 +338,9 @@ function EntryRow({ entry, hourlyRate, tab, onApprove, onFlag, onUnflag, last }:
             <CheckCircle size={10} /> {format(new Date(entry.approved_at), "MMM d")}
           </span>
         )}
+        <button onClick={() => onEdit(entry)} className="flex size-6 items-center justify-center rounded-md transition-colors hover:bg-[var(--tt-elevated-bg)]" style={{ color: "var(--tt-text-muted)" }} title="Edit entry">
+          <PenSquare size={12} />
+        </button>
       </div>
     </div>
   );

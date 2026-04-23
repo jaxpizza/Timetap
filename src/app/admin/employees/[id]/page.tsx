@@ -9,9 +9,10 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: adminProfile } = await supabase.from("profiles").select("organization_id").eq("id", user.id).single();
+  const { data: adminProfile } = await supabase.from("profiles").select("organization_id, first_name, last_name").eq("id", user.id).single();
   if (!adminProfile?.organization_id) return null;
   const orgId = adminProfile.organization_id;
+  const adderName = `${(adminProfile.first_name ?? "").trim()} ${(adminProfile.last_name ?? "").trim()}`.trim() || "Admin";
 
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
@@ -152,6 +153,8 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         radiusMeters: l.radius_meters ?? 402,
       }))}
       stats={{ weekHours, monthHours, avgPerDay, offSiteCount }}
+      organizationId={orgId}
+      adderName={adderName}
     />
   );
 }

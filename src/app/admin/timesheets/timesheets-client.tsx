@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { CheckCircle, AlertTriangle, Clock, FileText, ChevronDown, ChevronUp, Trash2, Undo2, MapPin } from "lucide-react";
+import { CheckCircle, AlertTriangle, Clock, FileText, ChevronDown, ChevronUp, Trash2, Undo2, MapPin, PenSquare, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatHours, getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { approveTimeEntry, approveAllForEmployee, flagTimeEntry, unflagTimeEntry, deleteTimeEntry } from "./actions";
+import { approveTimeEntry, approveAllForEmployee, flagTimeEntry, unflagTimeEntry, deleteTimeEntry, addManualEntry, editTimeEntry } from "./actions";
+import { ManualEntrySheet, ManualEntryExisting } from "@/components/manual-entry-sheet";
 
 interface Entry {
   id: string;
@@ -26,6 +27,7 @@ interface Entry {
 }
 interface PayRate { profile_id: string; rate: number; type: string }
 interface Department { id: string; name: string }
+interface Employee { id: string; first_name: string | null; last_name: string | null; email: string }
 
 function capitalize(s?: string | null) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
 
@@ -43,11 +45,13 @@ function groupByEmployee(entries: Entry[]) {
 
 type TabKey = "pending" | "approved" | "flagged";
 
-export function TimesheetsClient({ pendingEntries, approvedEntries, flaggedEntries, payRates, departments, organizationId }: {
-  pendingEntries: Entry[]; approvedEntries: Entry[]; flaggedEntries: Entry[]; payRates: PayRate[]; departments: Department[]; organizationId: string;
+export function TimesheetsClient({ pendingEntries, approvedEntries, flaggedEntries, payRates, departments, employees = [], adderName = "Admin", organizationId }: {
+  pendingEntries: Entry[]; approvedEntries: Entry[]; flaggedEntries: Entry[]; payRates: PayRate[]; departments: Department[]; employees?: Employee[]; adderName?: string; organizationId: string;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>("pending");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<ManualEntryExisting | null>(null);
 
   const rateMap = new Map<string, number>();
   for (const pr of payRates) rateMap.set(pr.profile_id, pr.type === "salary" ? Number(pr.rate) / 2080 : Number(pr.rate));
@@ -58,6 +62,19 @@ export function TimesheetsClient({ pendingEntries, approvedEntries, flaggedEntri
   const approvedGroups = groupByEmployee(approvedEntries);
   const flaggedGroups = groupByEmployee(flaggedEntries);
 
+  function openAdd() { setEditingEntry(null); setSheetOpen(true); }
+  function openEdit(entry: Entry) {
+    setEditingEntry({
+      id: entry.id,
+      profile_id: entry.profile_id,
+      clock_in: entry.clock_in,
+      clock_out: entry.clock_out,
+      total_break_minutes: entry.total_break_minutes,
+      notes: entry.notes,
+    });
+    setSheetOpen(true);
+  }
+
   const tabs: { key: TabKey; label: string; count?: number; badgeColor?: string }[] = [
     { key: "pending", label: "Pending Review", count: pendingEntries.length, badgeColor: "bg-amber-500/20 text-amber-400" },
     { key: "flagged", label: "Flagged", count: flaggedEntries.length, badgeColor: "bg-rose-500/20 text-rose-400" },
@@ -66,9 +83,14 @@ export function TimesheetsClient({ pendingEntries, approvedEntries, flaggedEntri
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <div>
-        <h1 className="font-heading text-2xl font-bold" style={{ color: "var(--tt-text-primary)" }}>Timesheets</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>Review and approve employee time entries</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="font-heading text-2xl font-bold" style={{ color: "var(--tt-text-primary)" }}>Timesheets</h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--tt-text-tertiary)" }}>Review and approve employee time entries</p>
+        </div>
+        <button onClick={openAdd} className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600">
+          <Plus size={15} /> Manual Entry
+        </button>
       </div>
 
       <div className="mt-5 flex gap-1 rounded-lg p-1" style={{ backgroundColor: "var(--tt-elevated-bg)" }}>
@@ -86,7 +108,7 @@ export function TimesheetsClient({ pendingEntries, approvedEntries, flaggedEntri
         pendingGroups.length === 0
           ? <EmptyState text="No timesheets pending review" sub="Completed shifts will appear here for approval" />
           : <motion.div variants={container} initial="hidden" animate="show" className="mt-4 space-y-3">
-              {pendingGroups.map((g) => <EmployeeCard key={g.profileId} group={g} rate={rateMap.get(g.profileId) ?? 0} dept={g.deptId ? deptMap.get(g.deptId) : undefined} orgId={organizationId} onAction={() => router.refresh()} mode="pending" />)}
+              {pendingGroups.map((g) => <EmployeeCard key={g.profileId} group={g} rate={rateMap.get(g.profileId) ?? 0} dept={g.deptId ? deptMap.get(g.deptId) : undefined} orgId={organizationId} onAction={() => router.refresh()} onEdit={openEdit} mode="pending" />)}
             </motion.div>
       )}
 
@@ -94,7 +116,7 @@ export function TimesheetsClient({ pendingEntries, approvedEntries, flaggedEntri
         flaggedGroups.length === 0
           ? <EmptyState text="No flagged entries" sub="Flagged time entries will appear here" />
           : <motion.div variants={container} initial="hidden" animate="show" className="mt-4 space-y-3">
-              {flaggedGroups.map((g) => <EmployeeCard key={g.profileId} group={g} rate={rateMap.get(g.profileId) ?? 0} dept={g.deptId ? deptMap.get(g.deptId) : undefined} orgId={organizationId} onAction={() => router.refresh()} mode="flagged" />)}
+              {flaggedGroups.map((g) => <EmployeeCard key={g.profileId} group={g} rate={rateMap.get(g.profileId) ?? 0} dept={g.deptId ? deptMap.get(g.deptId) : undefined} orgId={organizationId} onAction={() => router.refresh()} onEdit={openEdit} mode="flagged" />)}
             </motion.div>
       )}
 
@@ -102,15 +124,53 @@ export function TimesheetsClient({ pendingEntries, approvedEntries, flaggedEntri
         approvedGroups.length === 0
           ? <EmptyState text="No recently approved timesheets" sub="Approved entries from the last 7 days will show here" />
           : <motion.div variants={container} initial="hidden" animate="show" className="mt-4 space-y-3">
-              {approvedGroups.map((g) => <EmployeeCard key={g.profileId} group={g} rate={rateMap.get(g.profileId) ?? 0} dept={g.deptId ? deptMap.get(g.deptId) : undefined} orgId={organizationId} onAction={() => router.refresh()} mode="approved" />)}
+              {approvedGroups.map((g) => <EmployeeCard key={g.profileId} group={g} rate={rateMap.get(g.profileId) ?? 0} dept={g.deptId ? deptMap.get(g.deptId) : undefined} orgId={organizationId} onAction={() => router.refresh()} onEdit={openEdit} mode="approved" />)}
             </motion.div>
       )}
+
+      <ManualEntrySheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        mode={editingEntry ? "edit" : "add"}
+        employees={employees}
+        payRates={payRates}
+        existing={editingEntry}
+        adderName={adderName}
+        onAdd={async (p) => {
+          // Build ISO timestamps from local date/time + overnight flag
+          const [y, m, d] = p.date.split("-").map(Number);
+          const [ih, im] = p.clockInTime.split(":").map(Number);
+          const [oh, om] = p.clockOutTime.split(":").map(Number);
+          const inDate = new Date(y, (m ?? 1) - 1, (d ?? 1), ih ?? 0, im ?? 0);
+          const outDate = new Date(y, (m ?? 1) - 1, (d ?? 1) + (p.overnight ? 1 : 0), oh ?? 0, om ?? 0);
+          const r = await addManualEntry({
+            profileId: p.profileId,
+            organizationId,
+            clockIn: inDate.toISOString(),
+            clockOut: outDate.toISOString(),
+            breakMinutes: p.breakMinutes,
+            notes: p.notes,
+          });
+          if (r.success) router.refresh();
+          return { success: r.success, error: r.error };
+        }}
+        onEdit={async (p) => {
+          const r = await editTimeEntry({ entryId: p.entryId, clockIn: p.clockIn, clockOut: p.clockOut, breakMinutes: p.breakMinutes, notes: p.notes });
+          if (r.success) router.refresh();
+          return r;
+        }}
+        onDelete={async (id) => {
+          const r = await deleteTimeEntry(id);
+          if (r.success) router.refresh();
+          return r;
+        }}
+      />
     </motion.div>
   );
 }
 
-function EmployeeCard({ group, rate, dept, orgId, onAction, mode }: {
-  group: { profileId: string; name: string; entries: Entry[] }; rate: number; dept?: string; orgId: string; onAction: () => void; mode: "pending" | "approved" | "flagged";
+function EmployeeCard({ group, rate, dept, orgId, onAction, onEdit, mode }: {
+  group: { profileId: string; name: string; entries: Entry[] }; rate: number; dept?: string; orgId: string; onAction: () => void; onEdit: (e: Entry) => void; mode: "pending" | "approved" | "flagged";
 }) {
   const [expanded, setExpanded] = useState(mode === "flagged");
   const [approving, setApproving] = useState(false);
@@ -145,7 +205,7 @@ function EmployeeCard({ group, rate, dept, orgId, onAction, mode }: {
       {expanded && (
         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} transition={{ duration: 0.2 }}>
           <div style={{ borderTop: "1px solid var(--tt-border-faint)" }}>
-            {group.entries.map((entry) => <EntryRow key={entry.id} entry={entry} rate={rate} onAction={onAction} mode={mode} />)}
+            {group.entries.map((entry) => <EntryRow key={entry.id} entry={entry} rate={rate} onAction={onAction} onEdit={onEdit} mode={mode} />)}
           </div>
         </motion.div>
       )}
@@ -153,7 +213,7 @@ function EmployeeCard({ group, rate, dept, orgId, onAction, mode }: {
   );
 }
 
-function EntryRow({ entry, rate, onAction, mode }: { entry: Entry; rate: number; onAction: () => void; mode: "pending" | "approved" | "flagged" }) {
+function EntryRow({ entry, rate, onAction, onEdit, mode }: { entry: Entry; rate: number; onAction: () => void; onEdit: (e: Entry) => void; mode: "pending" | "approved" | "flagged" }) {
   const [loading, setLoading] = useState<string | null>(null);
   const hours = entry.total_hours ?? 0;
   const breakMin = entry.total_break_minutes ?? 0;
@@ -202,6 +262,7 @@ function EntryRow({ entry, rate, onAction, mode }: { entry: Entry; rate: number;
             </>
           )}
           {mode === "approved" && entry.approved_at && <span className="text-[11px]" style={{ color: "var(--tt-text-muted)" }}>Approved {format(new Date(entry.approved_at), "MMM d")}</span>}
+          <button onClick={() => onEdit(entry)} className="flex size-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--tt-elevated-bg)]" style={{ color: "var(--tt-text-muted)" }} title="Edit entry"><PenSquare size={14} /></button>
         </div>
       </div>
       {/* Flag note */}
