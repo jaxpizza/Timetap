@@ -226,8 +226,12 @@ export function ManualEntrySheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md" style={{ backgroundColor: "var(--tt-card-bg)", borderColor: "var(--tt-border)" }}>
-        <SheetHeader>
+      <SheetContent
+        side="right"
+        className="flex h-dvh w-full max-w-none flex-col gap-0 p-0 data-[side=right]:w-full sm:w-[520px] sm:max-w-[520px] data-[side=right]:sm:max-w-[520px]"
+        style={{ backgroundColor: "var(--tt-card-bg)", borderColor: "var(--tt-border)" }}
+      >
+        <SheetHeader className="shrink-0 border-b px-6 pt-6 pb-4" style={{ borderColor: "var(--tt-border-faint)" }}>
           <SheetTitle className="font-heading text-lg font-bold" style={{ color: "var(--tt-text-primary)" }}>
             {isEdit ? "Edit Time Entry" : "Add Manual Entry"}
           </SheetTitle>
@@ -238,7 +242,7 @@ export function ManualEntrySheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-5 space-y-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-4">
           {/* Employee */}
           <div>
             <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--tt-text-muted)" }}>
@@ -346,8 +350,15 @@ export function ManualEntrySheet({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="mt-6 flex flex-col gap-2">
+        {/* Sticky footer */}
+        <div
+          className="shrink-0 border-t px-6 py-4 flex flex-col gap-2"
+          style={{
+            borderColor: "var(--tt-border-faint)",
+            backgroundColor: "var(--tt-card-bg)",
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+          }}
+        >
           <Button
             onClick={handleSave}
             disabled={saving || !canSubmit}
